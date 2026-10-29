@@ -73,6 +73,7 @@ python -m tinydet.train --data work/data/data.yaml --out work/train --device 0
 ```
 
 默认模型是 `$TINY_WORK_DIR/weights/yolo11n.pt`，可用 `--model` 指定已下载的可信权重。
+当前支持单卡训练及CPU/MPS，不接受多GPU设备列表；DDP恢复合同需独立实现和验证。
 初始配方：AdamW、lr0=0.001、cosine、batch32、seed42、200epochs、patience40、GPU AMP；
 关闭mosaic/mixup/cutmix/多尺度，保留普通颜色/翻转/仿射增强。它是待产品数据评估的初始配方。
 train/val都断言RGB NCHW `[N,3,352,640]`、0–1，关闭官方验证额外补边。

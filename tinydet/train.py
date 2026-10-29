@@ -134,6 +134,8 @@ def check_training_run(output, identity, resume, model_path):
 
 def main(args):
     check_upstream()
+    if "," in args.device:
+        raise ValueError("TinyDet currently supports a single GPU or CPU/MPS; multi-GPU resume is not supported")
     data = Path(args.data).resolve()
     identity = validate_data(data)
     if not Path(args.model).is_file():
