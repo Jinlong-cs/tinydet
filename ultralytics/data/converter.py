@@ -387,26 +387,7 @@ def convert_coco(
 
 
 def convert_tinyseg(manifest: str | Path, output_dir: str | Path) -> Path:
-    """Prepare TinySeg binary semantic PNGs for the native SemanticDataset loader.
-
-    Args:
-        manifest (str | Path): JSONL with unique id, split (train/val), image and exactly one mask or label path.
-            Paths are relative to this manifest. Optional domain, capture group and source SHA256 fields are retained.
-        output_dir (str | Path): New dataset directory; existing paths are never overwritten.
-
-    Returns:
-        (Path): Generated data.yaml with the project's class names and native semantic mask layout.
-
-    Notes:
-        Inputs are 640x352 or 640x512. Images use full-frame LINEAR resize to 640x352; masks use NEAREST and
-        contain 0=non_drivable, 1=drivable, 255=ignore. Legacy normalized polygons use 0=drivable and 1=exclusion;
-        exclusions overwrite drivable irrespective of annotation order. Empty polygon files are reviewed negatives.
-        This prepares files only; fixed tensor geometry and the TinySeg training recipe are separate adaptations.
-
-    Examples:
-        >>> from ultralytics.data.converter import convert_tinyseg
-        >>> data_yaml = convert_tinyseg("source.jsonl", "work/tinyseg")
-    """
+    """Convert a TinySeg manifest to binary semantic PNGs and return the dataset YAML path."""
     manifest, output_dir = Path(manifest).resolve(), Path(output_dir).resolve()
     rows = [json.loads(line) for line in manifest.read_text().splitlines() if line.strip()]
     if not rows or {row["split"] for row in rows} != {"train", "val"}:
@@ -461,7 +442,7 @@ def convert_tinyseg(manifest: str | Path, output_dir: str | Path) -> Path:
                 points = np.floor(xy * [640, 352] + 0.5).astype(np.int32)
                 polygons[int(values[0])].append(np.clip(points, [0, 0], [639, 351]))
             mask = np.zeros((352, 640), np.uint8)
-            for cls in (0, 1):  # Legacy exclusion polygons take priority over drivable polygons.
+            for cls in (0, 1):  # Exclusion polygons take priority.
                 for points in polygons[cls]:
                     cv2.fillPoly(mask, [points], 1 - cls, lineType=cv2.LINE_8)
         image_name, mask_name = f"images/{split}/{i:07}.png", f"masks/{split}/{i:07}.png"
@@ -490,7 +471,7 @@ def convert_tinyseg(manifest: str | Path, output_dir: str | Path) -> Path:
         "counts": {split: sum(row["split"] == split for row in prepared) for split in ("train", "val")},
     }
     (output_dir / "dataset.json").write_text(json.dumps(metadata, indent=2) + "\n")
-    YAML.save(output_dir / "data.yaml", data)  # Published last: failed conversions have no consumable dataset YAML.
+    YAML.save(output_dir / "data.yaml", data)
     return output_dir / "data.yaml"
 
 

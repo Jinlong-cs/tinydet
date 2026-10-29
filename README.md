@@ -4,10 +4,37 @@ TinySeg is the ToC robot drivable-area segmentation project, maintained as an in
 [Ultralytics](https://github.com/ultralytics/ultralytics). The selected architecture is **YOLO26n-sem**;
 the Python package and upstream source layout remain `ultralytics`.
 
-The first adaptation adds [TinySeg data preparation](docs/en/datasets/semantic/index.md#tinyseg-data-preparation)
-with `0=non_drivable`, `1=drivable`, and `255=ignore`. Fixed 640×352 training, the historical training recipe,
-opset11 export, and X5 INT8 compilation will follow in separate reviewed PRs.
-The upstream README and license information are preserved below.
+## Data preparation
+
+The [dataset configuration](ultralytics/cfg/datasets/tinyseg.yaml) defines `0=non_drivable`, `1=drivable`,
+and `255=ignore`. Inputs are 640×352 or 640×512; images use full-frame LINEAR resize to 640×352 and native
+PNG masks use NEAREST. Legacy normalized polygons use `0=drivable`, `1=exclusion` and are rasterized at
+the target size, with exclusions taking priority.
+
+Provide a JSONL manifest with unique IDs, nonempty train/val splits, and exactly one `label` or `mask`
+per image. Paths are relative to the manifest. Split by capture sequence and supply `group` to prevent
+sequence leakage; `domain` retains the product/view. Empty polygon files must be reviewed negatives.
+
+```jsonl
+{"id":"front-01","split":"train","group":"capture-01","image":"raw/front-01.png","label":"labels/front-01.txt"}
+{"id":"back-02","split":"val","group":"capture-02","image":"raw/back-02.png","mask":"masks/back-02.png"}
+```
+
+```python
+from ultralytics.data.converter import convert_tinyseg
+
+data_yaml = convert_tinyseg("source.jsonl", "work/tinyseg")
+```
+
+The output directory must not exist. It contains matching `images/{train,val}` and `masks/{train,val}`
+PNGs, a provenance `manifest.jsonl`, `dataset.json`, and `data.yaml`. Optional `image_sha256` and
+`label_sha256`/`mask_sha256` fields are verified; source/output hashes are recorded. Invalid annotations
+and cross-split pixel/group leakage raise errors. Failed conversions can leave partial output without
+`data.yaml`; inspect and remove it or retry in a new directory.
+
+This prepares dataset files only; native training transforms can still change tensor geometry.
+Fixed 640×352 training, the historical recipe, opset11 export, and X5 INT8 compilation will follow in
+separate reviewed PRs. The upstream README and license information are preserved below.
 
 ---
 

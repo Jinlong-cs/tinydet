@@ -24,10 +24,6 @@ keywords: Ultralytics, data conversion, YOLO models, COCO, DOTA, YOLO bbox2segme
 
 <br><br><hr><br>
 
-## ::: ultralytics.data.converter.convert_tinyseg
-
-<br><br><hr><br>
-
 ## ::: ultralytics.data.converter.convert_segment_masks_to_yolo_seg
 
 <br><br><hr><br>
