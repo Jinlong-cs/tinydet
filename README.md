@@ -1,16 +1,22 @@
-# TinyDet
+# TinyPerception
 
-TinyDet is the robot object detection project, maintained as an incremental fork of
-[Ultralytics](https://github.com/ultralytics/ultralytics). The selected model is **YOLO11n**.
-Project adapters live in `tinydet/` and reuse the upstream model, loss, Trainer and Validator.
+TinyPerception is the shared [Ultralytics](https://github.com/ultralytics/ultralytics) fork for
+TinyDet object detection and TinySeg semantic segmentation. Task entry points, configurations,
+class mappings and export workflows remain separate; both reuse upstream model and training implementations.
+Workflow integration and upstream-version alignment will proceed through reviewed PRs.
 
-## Setup
+## TinyDet (YOLO11n)
+
+This `tinydet` branch provides the detection adapters in `tinydet/`. TinySeg data preparation is
+developed separately in [PR #1](https://github.com/Jinlong-cs/tinyperception/pull/1).
+
+### Setup
 
 Use Python 3.11+ and install this checkout from the `tinydet` branch:
 
 ```bash
-git clone -b tinydet https://github.com/Jinlong-cs/tinydet.git
-cd tinydet
+git clone -b tinydet https://github.com/Jinlong-cs/tinyperception.git
+cd tinyperception
 python3.11 -m venv venv
 source venv/bin/activate
 export TINY_WORK_DIR="$PWD/work"
@@ -21,7 +27,7 @@ mkdir -p "$TMPDIR" "$PIP_CACHE_DIR" "$TINY_WORK_DIR/weights"
 python -m pip install -e ".[tinydet]"
 ```
 
-## Data preparation
+### Data preparation
 
 Provide an ordered `classes.json`, such as `["person", "chair"]`, and YOLO labels in
 `class_id cx cy width height` format with normalized coordinates. Empty label files must be
@@ -45,7 +51,7 @@ The output directory must not exist. It contains matching images/labels, `data.y
 `classes.json`, `dataset.json` and a manifest with source/output hashes. Training validates the
 prepared file set and class order; interrupted runs require the original data and output directory.
 
-## Training
+### Training
 
 Place trusted official [YOLO11n weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt)
 in `work/weights/yolo11n.pt` (SHA256 `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1`).
@@ -62,7 +68,7 @@ Training and validation use RGB NCHW 352×640 inputs scaled to 0–1. Only one d
 use `--device cpu` for CPU. The full `resume.pt` retains optimizer/EMA/scaler state.
 See each module's `--help` for additional options.
 
-## ONNX export and X5 compilation
+### ONNX export and X5 compilation
 
 ```bash
 python -m tinydet.export --checkpoint work/train/weights/best.pt \
