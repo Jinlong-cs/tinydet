@@ -1,3 +1,9 @@
+# TinyDet project fork
+
+This is a fork of the official Ultralytics repository. The `tinydet` branch contains our
+[YOLO11n training, six-head ONNX export and RDK X5 INT8 workflow](tinydet/README.md).
+The upstream model implementation is retained; the original Ultralytics README follows.
+
 <div align="center">
   <p>
     <a href="https://www.ultralytics.com/yolo/yolo27?utm_source=github&utm_medium=social&utm_campaign=yolo27-launch-2026&utm_content=banner" target="_blank">
