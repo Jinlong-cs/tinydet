@@ -14,10 +14,13 @@ the target size, with exclusions taking priority.
 Provide a JSONL manifest with unique IDs, nonempty train/val splits, and exactly one `label` or `mask`
 per image. Paths are relative to the manifest. Split by capture sequence and supply `group` to prevent
 sequence leakage; `domain` retains the product/view. Empty polygon files must be reviewed negatives.
+Grayscale PNG rows require `mask_encoding`: `binary_255` means 0=background/255=foreground; `class_ids` means
+0=background/1=foreground/255=ignore. Native 1-bit PNGs use the upstream decoder to preserve 0/1.
+Missing or unknown encodings raise an error; no pixel-value guessing is performed.
 
 ```jsonl
 {"id":"front-01","split":"train","group":"capture-01","image":"raw/front-01.png","label":"labels/front-01.txt"}
-{"id":"back-02","split":"val","group":"capture-02","image":"raw/back-02.png","mask":"masks/back-02.png"}
+{"id":"back-02","split":"val","group":"capture-02","image":"raw/back-02.png","mask":"masks/back-02.png","mask_encoding":"class_ids"}
 ```
 
 ```python
@@ -31,6 +34,7 @@ PNGs, a provenance `manifest.jsonl`, `dataset.json`, and `data.yaml`. Optional `
 `label_sha256`/`mask_sha256` fields are verified; source/output hashes are recorded. Invalid annotations
 and cross-split pixel/group leakage raise errors. Failed conversions can leave partial output without
 `data.yaml`; inspect and remove it or retry in a new directory.
+Prepared manifests always declare `mask_encoding: class_ids` for reuse.
 
 This prepares dataset files only; native training transforms can still change tensor geometry.
 Fixed 640×352 training, the historical recipe, opset11 export, and X5 INT8 compilation will follow in

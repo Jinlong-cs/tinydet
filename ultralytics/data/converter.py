@@ -426,9 +426,20 @@ def convert_tinyseg(manifest: str | Path, output_dir: str | Path) -> Path:
         if group:
             groups[group] = split
         if annotation == "mask":
-            mask = cv2.imread(str(paths["mask"]), cv2.IMREAD_UNCHANGED)
-            if mask is None or mask.shape != native_shape or not np.isin(mask, [*data["names"], 255]).all():
-                raise ValueError(f"Mask must match native image and contain class IDs or 255: {row['id']}")
+            encoding = row.get("mask_encoding")
+            if encoding not in {"class_ids", "binary_255"}:
+                raise ValueError(f"Set mask_encoding to class_ids or binary_255: {row['id']}")
+            with Image.open(paths["mask"]) as im:
+                mode = im.mode
+                if mode not in {"1", "L", "I", "I;16"}:
+                    raise ValueError(f"Expected a grayscale mask: {row['id']}")
+            mask = read_mask(str(paths["mask"]), mode)
+            binary = encoding == "binary_255" and mode != "1"
+            values = (0, 255) if binary else (*data["names"], 255)
+            if mask.shape != native_shape or not np.isin(mask, values).all():
+                raise ValueError(f"Mask must match native image and {encoding} values: {row['id']}")
+            if binary:
+                mask = mask // 255
             mask = cv2.resize(mask.astype(np.uint8), (640, 352), interpolation=cv2.INTER_NEAREST)
         else:
             polygons = {0: [], 1: []}
@@ -456,6 +467,7 @@ def convert_tinyseg(manifest: str | Path, output_dir: str | Path) -> Path:
                 "group": group,
                 "image": image_name,
                 "mask": mask_name,
+                "mask_encoding": "class_ids",
                 "image_sha256": hashlib.sha256((output_dir / image_name).read_bytes()).hexdigest(),
                 "mask_sha256": hashlib.sha256((output_dir / mask_name).read_bytes()).hexdigest(),
                 "source_image_sha256": hashes["image"],
