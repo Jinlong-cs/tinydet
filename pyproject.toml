@@ -82,6 +82,7 @@ dependencies = [
 
 # Optional dependencies ------------------------------------------------------------------------------------------------
 [project.optional-dependencies]
+tinydet = ["onnx>=1.16,<2", "onnxruntime>=1.20,<2", "torch>=2.6,<3"]
 dev = [
     "ipython",
     "pytest",
@@ -194,7 +195,7 @@ ultralytics = "ultralytics.cfg:entrypoint"
 
 # Tools settings -------------------------------------------------------------------------------------------------------
 [tool.setuptools]  # configuration specific to the `setuptools` build backend.
-packages = { find = { where = ["."], include = ["ultralytics", "ultralytics.*"] } }
+packages = { find = { where = ["."], include = ["ultralytics", "ultralytics.*", "tinydet", "tinydet.*"] } }
 package-data = { "ultralytics" = ["**/*.yaml", "**/*.sh"], "ultralytics.assets" = ["*.jpg"], "ultralytics.solutions.templates" = ["*.html"]}
 
 [tool.setuptools.dynamic]
