@@ -3,11 +3,11 @@
 TinyPerception is the shared [Ultralytics](https://github.com/ultralytics/ultralytics) fork for
 TinyDet object detection and TinySeg semantic segmentation. Task entry points, configurations,
 class mappings and export workflows remain separate; both reuse upstream model and training implementations.
-Both tasks use the same upstream base and are introduced through separate reviewed PRs.
+Both tasks use the same upstream base; their dataset labels and preprocessing remain task-specific.
 
 ## TinyDet (YOLO11n)
 
-Detection adapters live in `tinydet/`. TinySeg data preparation is a separate follow-up PR.
+Detection adapters live in `tinydet/`. See [TinySeg](#tinyseg-yolo26n-sem) for semantic data preparation.
 
 ### Setup
 
@@ -108,6 +108,47 @@ The upstream base is `922563eab42b778445e55a2edbabb6974eed8e4b` (8.4.192). Adapt
 [tinydet-legacy](https://github.com/Jinlong-cs/tinydet-legacy) at `7e9a16edd4ae25c8301a6fba82e57b4ae518a4e1`.
 Raw-head/Attention export code derives from [D-Robotics](https://github.com/D-Robotics/rdk_model_zoo/blob/rdk_x5/samples/vision/ultralytics_yolo/conversion/export_monkey_patch.py);
 attribution and its [Apache-2.0 license](tinydet/LICENSE-D-Robotics) are retained.
+
+## TinySeg (YOLO26n-sem)
+
+TinySeg provides binary drivable-area data preparation for the ToC robot.
+
+### Data preparation
+
+The [dataset configuration](ultralytics/cfg/datasets/tinyseg.yaml) defines `0=non_drivable`, `1=drivable`,
+and `255=ignore`. Inputs are 640×352 or 640×512; images use full-frame LINEAR resize to 640×352 and native
+PNG masks use NEAREST. Legacy normalized polygons use `0=drivable`, `1=exclusion` and are rasterized at
+the target size, with exclusions taking priority.
+
+Provide a JSONL manifest with unique IDs, nonempty train/val splits, and exactly one `label` or `mask`
+per image. Paths are relative to the manifest. Split by capture sequence and supply `group` to prevent
+sequence leakage; `domain` retains the product/view. Empty polygon files must be reviewed negatives.
+Grayscale PNG rows require `mask_encoding`: `binary_255` means 0=background/255=foreground; `class_ids` means
+0=background/1=foreground/255=ignore. Native 1-bit PNGs use the upstream decoder to preserve 0/1.
+Missing or unknown encodings raise an error; no pixel-value guessing is performed.
+
+```jsonl
+{"id":"front-01","split":"train","group":"capture-01","image":"raw/front-01.png","label":"labels/front-01.txt"}
+{"id":"back-02","split":"val","group":"capture-02","image":"raw/back-02.png","mask":"masks/back-02.png","mask_encoding":"class_ids"}
+```
+
+```python
+from ultralytics.data.converter import convert_tinyseg
+
+data_yaml = convert_tinyseg("source.jsonl", "work/tinyseg")
+```
+
+The output directory must not exist. It contains matching `images/{train,val}` and `masks/{train,val}`
+PNGs, a provenance `manifest.jsonl`, `dataset.json`, and `data.yaml`. Optional `image_sha256` and
+`label_sha256`/`mask_sha256` fields are verified; source/output hashes are recorded. Invalid annotations
+and cross-split pixel/group leakage raise errors. Failed conversions can leave partial output without
+`data.yaml`; inspect and remove it or retry in a new directory.
+Prepared manifests always declare `mask_encoding: class_ids` for reuse.
+
+This prepares dataset files only; native semantic training transforms can still change tensor geometry.
+Fixed 640×352 semantic training, the historical recipe, opset11 export, and X5 INT8 compilation will follow
+in separate reviewed PRs.
+
 The upstream README and [AGPL-3.0 license](LICENSE) are preserved below.
 
 ---
