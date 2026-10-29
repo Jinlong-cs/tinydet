@@ -1,8 +1,4 @@
-# TinyDet project fork
-
-This is a fork of the official Ultralytics repository. The `tinydet` branch contains our
-[YOLO11n training, six-head ONNX export and RDK X5 INT8 workflow](tinydet/README.md).
-The upstream model implementation is retained; the original Ultralytics README follows.
+**TinyDet**：[YOLO11n 训练、ONNX 导出和 X5 编译](tinydet/README.md)。
 
 <div align="center">
   <p>

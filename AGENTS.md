@@ -4,6 +4,12 @@ This file provides guidance to AI coding agents (Claude Code, etc.) when working
 
 Ultralytics (`ultralytics` on PyPI, AGPL-3.0) is the official Python package for YOLO-family vision models — detection, instance and semantic segmentation, depth, classification, pose, oriented boxes, and tracking — plus training, validation, benchmarking, export to 20+ deployment formats, and the `yolo` CLI. Supported floors are Python>=3.8 with PyTorch>=1.8. The version lives in `ultralytics/__init__.py` (`__version__`).
 
+## TinyDet project workflow
+
+- Leave project changes in a PR for user review. Merge only after the user explicitly approves merging that PR.
+- Use `Jinlong-cs <74873864+Jinlong-cs@users.noreply.github.com>` as author and committer for project commits.
+- Keep project documentation in `tinydet/README.md`; add separate Markdown files only when necessary. Preserve upstream documentation.
+
 ## Core Principles (CRITICAL)
 
 **Less is more. The simplest solution is the best solution.** The action hierarchy for every change: **Delete > Replace > Add**.
