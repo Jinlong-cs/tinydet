@@ -26,6 +26,7 @@ from ultralytics.utils import (
     LOGGER,
     NUM_THREADS,
     PLATFORM_URL,
+    ROOT,
     TQDM,
     WINDOWS,
     YAML,
@@ -383,6 +384,114 @@ def convert_coco(
                 )
 
     LOGGER.info(f"{'LVIS' if lvis else 'COCO'} data converted successfully.\nResults saved to {save_dir.resolve()}")
+
+
+def convert_tinyseg(manifest: str | Path, output_dir: str | Path) -> Path:
+    """Prepare TinySeg binary semantic PNGs for the native SemanticDataset loader.
+
+    Args:
+        manifest (str | Path): JSONL with unique id, split (train/val), image and exactly one mask or label path.
+            Paths are relative to this manifest. Optional domain, capture group and source SHA256 fields are retained.
+        output_dir (str | Path): New dataset directory; existing paths are never overwritten.
+
+    Returns:
+        (Path): Generated data.yaml with the project's class names and native semantic mask layout.
+
+    Notes:
+        Inputs are 640x352 or 640x512. Images use full-frame LINEAR resize to 640x352; masks use NEAREST and
+        contain 0=non_drivable, 1=drivable, 255=ignore. Legacy normalized polygons use 0=drivable and 1=exclusion;
+        exclusions overwrite drivable irrespective of annotation order. Empty polygon files are reviewed negatives.
+        This prepares files only; fixed tensor geometry and the TinySeg training recipe are separate adaptations.
+
+    Examples:
+        >>> from ultralytics.data.converter import convert_tinyseg
+        >>> data_yaml = convert_tinyseg("source.jsonl", "work/tinyseg")
+    """
+    manifest, output_dir = Path(manifest).resolve(), Path(output_dir).resolve()
+    rows = [json.loads(line) for line in manifest.read_text().splitlines() if line.strip()]
+    if not rows or {row["split"] for row in rows} != {"train", "val"}:
+        raise ValueError("TinySeg requires explicit, nonempty train and val splits")
+    ids = [row["id"] for row in rows]
+    if len(set(ids)) != len(ids):
+        raise ValueError("Duplicate TinySeg sample id")
+    data = YAML.load(ROOT / "cfg/datasets/tinyseg.yaml")
+    data["path"] = str(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=False)
+    for split in ("train", "val"):
+        for folder in ("images", "masks"):
+            (output_dir / folder / split).mkdir(parents=True)
+    prepared, pixels, groups = [], {}, {}
+    for i, row in enumerate(rows):
+        if ("mask" in row) == ("label" in row):
+            raise ValueError(f"Expected exactly one mask or label: {row['id']}")
+        annotation = "mask" if "mask" in row else "label"
+        paths = {key: (manifest.parent / row[key]).resolve() for key in ("image", annotation)}
+        hashes = {key: hashlib.sha256(path.read_bytes()).hexdigest() for key, path in paths.items()}
+        for key, digest in hashes.items():
+            if row.get(f"{key}_sha256", digest) != digest:
+                raise ValueError(f"Source {key} hash mismatch: {row['id']}")
+        image = cv2.imread(str(paths["image"]))
+        if image is None or image.shape not in {(352, 640, 3), (512, 640, 3)}:
+            raise ValueError(f"Expected 640x352 or 640x512 image: {row['id']}")
+        native_shape = image.shape[:2]
+        image = cv2.resize(image, (640, 352), interpolation=cv2.INTER_LINEAR)
+        pixel_hash = hashlib.sha256(image[:, :, ::-1].tobytes()).hexdigest()
+        split, group = row["split"], row.get("group")
+        if pixel_hash in pixels and pixels[pixel_hash] != split:
+            raise ValueError(f"Train/val pixel leakage: {row['id']}")
+        if group and group in groups and groups[group] != split:
+            raise ValueError(f"Capture group crosses train/val: {group}")
+        pixels[pixel_hash] = split
+        if group:
+            groups[group] = split
+        if annotation == "mask":
+            mask = cv2.imread(str(paths["mask"]), cv2.IMREAD_UNCHANGED)
+            if mask is None or mask.shape != native_shape or not np.isin(mask, [*data["names"], 255]).all():
+                raise ValueError(f"Mask must match native image and contain class IDs or 255: {row['id']}")
+            mask = cv2.resize(mask.astype(np.uint8), (640, 352), interpolation=cv2.INTER_NEAREST)
+        else:
+            polygons = {0: [], 1: []}
+            for line in paths["label"].read_text().splitlines():
+                values = np.asarray([float(v) for v in line.split()])
+                if values.size < 7 or values.size % 2 != 1 or values[0] not in polygons:
+                    raise ValueError(f"Invalid legacy polygon: {row['id']}")
+                xy = values[1:].reshape(-1, 2)
+                if not np.isfinite(xy).all() or (xy < 0).any() or (xy > 1).any():
+                    raise ValueError(f"Polygon outside normalized coordinates: {row['id']}")
+                points = np.floor(xy * [640, 352] + 0.5).astype(np.int32)
+                polygons[int(values[0])].append(np.clip(points, [0, 0], [639, 351]))
+            mask = np.zeros((352, 640), np.uint8)
+            for cls in (0, 1):  # Legacy exclusion polygons take priority over drivable polygons.
+                for points in polygons[cls]:
+                    cv2.fillPoly(mask, [points], 1 - cls, lineType=cv2.LINE_8)
+        image_name, mask_name = f"images/{split}/{i:07}.png", f"masks/{split}/{i:07}.png"
+        if not cv2.imwrite(str(output_dir / image_name), image) or not cv2.imwrite(str(output_dir / mask_name), mask):
+            raise OSError(f"Failed to write prepared sample: {row['id']}")
+        prepared.append(
+            {
+                "id": row["id"],
+                "split": split,
+                "domain": row.get("domain", "default/view"),
+                "group": group,
+                "image": image_name,
+                "mask": mask_name,
+                "image_sha256": hashlib.sha256((output_dir / image_name).read_bytes()).hexdigest(),
+                "mask_sha256": hashlib.sha256((output_dir / mask_name).read_bytes()).hexdigest(),
+                "source_image_sha256": hashes["image"],
+                "source_label_sha256": hashes[annotation],
+            }
+        )
+    (output_dir / "manifest.jsonl").write_text("".join(json.dumps(row) + "\n" for row in prepared))
+    metadata = {
+        "source_manifest_sha256": hashlib.sha256(manifest.read_bytes()).hexdigest(),
+        "input": [3, 352, 640],
+        "classes": data["names"],
+        "ignore": 255,
+        "counts": {split: sum(row["split"] == split for row in prepared) for split in ("train", "val")},
+    }
+    (output_dir / "dataset.json").write_text(json.dumps(metadata, indent=2) + "\n")
+    YAML.save(output_dir / "data.yaml", data)  # Published last: failed conversions have no consumable dataset YAML.
+    return output_dir / "data.yaml"
 
 
 def convert_segment_masks_to_yolo_seg(masks_dir: str, output_dir: str, classes: int):

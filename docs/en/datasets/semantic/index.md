@@ -105,6 +105,49 @@ Ultralytics provides semantic segmentation dataset YAML files for these datasets
 - [Cityscapes8](cityscapes8.md): An 8-image Cityscapes subset for quick tests and CI checks.
 - [ADE20K](ade20k.md): Scene parsing dataset with 150 semantic classes.
 
+## TinySeg Data Preparation
+
+This fork defines TinySeg as two semantic classes: `0=non_drivable`, `1=drivable`. Pixel value `255` is
+unsupervised and excluded from loss and metrics. The class names and mask mapping live in
+[`ultralytics/cfg/datasets/tinyseg.yaml`](../../../../ultralytics/cfg/datasets/tinyseg.yaml).
+These PNG IDs differ from the legacy polygon labels: polygon class `0` is drivable and class `1` is
+an exclusion (historically stairs). Exclusions always overwrite drivable polygons. This remains a
+binary task; adding classes requires a separate training and deployment contract.
+
+Prepare a JSONL manifest with unique IDs, explicit `train`/`val` splits, an `image` path and exactly
+one annotation path: `label` for normalized legacy YOLO polygons or `mask` for a single-channel PNG.
+Paths are relative to the manifest. Split by capture sequence before conversion and supply `group`
+so frames from the same sequence cannot cross train/val; `domain` can retain the product and camera view.
+Do not include unannotated images. An empty polygon file means a **reviewed negative**, producing an
+all-background mask; missing annotation files are errors. Both splits must be nonempty.
+
+```jsonl
+{"id":"front-0001","split":"train","group":"capture-01","domain":"toc/front","image":"raw/front-0001.png","label":"labels/front-0001.txt"}
+{"id":"back-0002","split":"val","group":"capture-02","domain":"toc/back","image":"raw/back-0002.png","mask":"masks/back-0002.png"}
+```
+
+```python
+from ultralytics.data.converter import convert_tinyseg
+
+# The output directory must not exist.
+data_yaml = convert_tinyseg("source.jsonl", "work/tinyseg")
+```
+
+Inputs must be 640×352 or 640×512. Images are resized over the full frame to 640×352 with OpenCV
+`INTER_LINEAR`, without crop or letterbox. Native-resolution PNG masks use `INTER_NEAREST`; normalized
+polygons are rasterized at the target size, rounding to the nearest pixel and clipping to the image.
+The converter rejects cross-split duplicate resized pixels and groups. Optional `image_sha256` and
+`mask_sha256` or `label_sha256` fields are checked against the source files.
+
+The output uses the native `images/{train,val}` and `masks/{train,val}` layout, with matching numeric
+filenames. `manifest.jsonl` retains sample IDs, splits, domains, groups and source/output hashes;
+`dataset.json` records the source-manifest hash, dimensions, classes and counts. `data.yaml` is written
+last and points to the absolute output path. A failed conversion can leave partial files but no
+completed dataset YAML; inspect and remove that incomplete output or retry in a new directory.
+
+This step prepares dataset files only. The stock training transforms can still change tensor geometry;
+fixed 640×352 training and reproduction of the historical recipe are separate adaptations.
+
 ## Adding Your Own Dataset
 
 ### Option A — PNG masks

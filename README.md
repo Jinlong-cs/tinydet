@@ -1,3 +1,16 @@
+# TinySeg
+
+TinySeg is the ToC robot drivable-area segmentation project, maintained as an incremental fork of
+[Ultralytics](https://github.com/ultralytics/ultralytics). The selected architecture is **YOLO26n-sem**;
+the Python package and upstream source layout remain `ultralytics`.
+
+The first adaptation adds [TinySeg data preparation](docs/en/datasets/semantic/index.md#tinyseg-data-preparation)
+with `0=non_drivable`, `1=drivable`, and `255=ignore`. Fixed 640×352 training, the historical training recipe,
+opset11 export, and X5 INT8 compilation will follow in separate reviewed PRs.
+The upstream README and license information are preserved below.
+
+---
+
 <div align="center">
   <p>
     <a href="https://www.ultralytics.com/yolo/yolo27?utm_source=github&utm_medium=social&utm_campaign=yolo27-launch-2026&utm_content=banner" target="_blank">
