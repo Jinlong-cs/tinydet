@@ -8,7 +8,8 @@ Ultralytics (`ultralytics` on PyPI, AGPL-3.0) is the official Python package for
 
 - Leave project changes in a PR for user review. Merge only after the user explicitly approves merging that PR.
 - Use `Jinlong-cs <74873864+Jinlong-cs@users.noreply.github.com>` as author and committer for project commits.
-- Keep project documentation in `tinydet/README.md`; add separate Markdown files only when necessary. Preserve upstream documentation.
+- Keep project documentation in English in the root `README.md`; add separate Markdown files only when necessary. Preserve upstream documentation.
+- Use concise `type(scope): description` PR titles and English `Summary` / `Validation` sections, following the TinySeg project style.
 
 ## Core Principles (CRITICAL)
 
