@@ -1,8 +1,117 @@
-# TinyDet project fork
+# TinyPerception
 
-This is a fork of the official Ultralytics repository. The `tinydet` branch contains our
-[YOLO11n training, six-head ONNX export and RDK X5 INT8 workflow](tinydet/README.md).
-The upstream model implementation is retained; the original Ultralytics README follows.
+TinyPerception is the shared [Ultralytics](https://github.com/ultralytics/ultralytics) fork for
+TinyDet object detection and TinySeg semantic segmentation. Task entry points, configurations,
+class mappings and export workflows remain separate; both reuse upstream model and training implementations.
+Workflow integration and upstream-version alignment will proceed through reviewed PRs.
+
+## TinyDet (YOLO11n)
+
+This `tinydet` branch provides the detection adapters in `tinydet/`. TinySeg data preparation is
+developed separately in [PR #1](https://github.com/Jinlong-cs/tinyperception/pull/1).
+
+### Setup
+
+Use Python 3.11+ and install this checkout from the `tinydet` branch:
+
+```bash
+git clone -b tinydet https://github.com/Jinlong-cs/tinyperception.git
+cd tinyperception
+python3.11 -m venv venv
+source venv/bin/activate
+export TINY_WORK_DIR="$PWD/work"
+export PIP_CACHE_DIR="$TINY_WORK_DIR/cache/pip"
+export TMPDIR="$TINY_WORK_DIR/tmp"
+export PYTHONDONTWRITEBYTECODE=1
+mkdir -p "$TMPDIR" "$PIP_CACHE_DIR" "$TINY_WORK_DIR/weights"
+python -m pip install -e ".[tinydet]"
+```
+
+### Data preparation
+
+Provide an ordered `classes.json`, such as `["person", "chair"]`, and YOLO labels in
+`class_id cx cy width height` format with normalized coordinates. Empty label files must be
+reviewed negatives; missing files raise an error. JSONL paths are relative to the manifest:
+
+```jsonl
+{"id":"001","split":"train","domain":"toc/front","group":"session_a","image":"images/001.png","label":"labels/001.txt"}
+{"id":"002","split":"val","domain":"toc/front","group":"session_b","image":"images/002.png","label":"labels/002.txt"}
+```
+
+Inputs are 640×352, 640×480 or 640×512, resized over the full frame to 640×352 with LINEAR interpolation.
+Normalized boxes retain their coordinates. Split by capture sequence; groups and duplicate pixels
+cannot cross train/val. Partial labels, ignore regions and a separate test split are not supported.
+
+```bash
+python -m tinydet.prepare_data --manifest /path/to/source.jsonl \
+  --classes /path/to/classes.json --out work/data
+```
+
+The output directory must not exist. It contains matching images/labels, `data.yaml`,
+`classes.json`, `dataset.json` and a manifest with source/output hashes. Training validates the
+prepared file set and class order; interrupted runs require the original data and output directory.
+
+### Training
+
+Place trusted official [YOLO11n weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt)
+in `work/weights/yolo11n.pt` (SHA256 `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1`).
+Weights are not downloaded automatically; `--model` accepts another local checkpoint.
+
+```bash
+python -m tinydet.train --data work/data/data.yaml --out work/train --device 0
+# Resume an interrupted run with the original data, output directory and device environment.
+python -m tinydet.train --data work/data/data.yaml --model work/train/weights/resume.pt \
+  --out work/train --device 0 --resume
+```
+
+Training and validation use RGB NCHW 352×640 inputs scaled to 0–1. Only one device is supported;
+use `--device cpu` for CPU. The full `resume.pt` retains optimizer/EMA/scaler state.
+See each module's `--help` for additional options.
+
+### ONNX export and X5 compilation
+
+```bash
+python -m tinydet.export --checkpoint work/train/weights/best.pt \
+  --check-manifest work/data/manifest.jsonl --out work/export
+python -m tinydet.x5 calibrate --manifest work/data/manifest.jsonl \
+  --count 512 --out work/calibration
+```
+
+The opset11 graph accepts FLOAT32 `[1,3,352,640]` and returns
+`cls_s8, box_s8, cls_s16, box_s16, cls_s32, box_s32`. Grids are 44×80, 22×40 and 11×20;
+class channels follow the checkpoint, and box heads have 64 channels (DFL reg_max16).
+Decoding/NMS runs outside the graph; class changes require matching deployment metadata.
+
+By default, export checks raw heads, decoded boxes and scores on up to 64 validation images plus random input.
+Calibration uses train samples only; `--count` cannot exceed the train set size. Files contain
+RGB 0–255 float32 CHW values, and the mapper applies 1/255 once. Export records source, class and model
+hashes; calibration records source-manifest, sample and RGB-file hashes.
+
+Run the compiler in an x86 Linux OpenExplorer v1.2.8 environment:
+
+```bash
+IMAGE=registry.d-robotics.cc/deliver/hub.hobot.cc/aitools/ai_toolchain_ubuntu_20_x5_cpu:v1.2.8
+docker run --rm --cpus=4 --memory=16g \
+  -v "$PWD:/workspace" -w /workspace \
+  -e TINY_WORK_DIR=/workspace/work -e PYTHONDONTWRITEBYTECODE=1 \
+  -e OMP_NUM_THREADS=4 -e OPENBLAS_NUM_THREADS=4 \
+  "$IMAGE" python3 -m tinydet.x5 compile \
+  --onnx work/export/model.onnx --calibration work/calibration/rgb \
+  --out work/ptq --name yolo11n_640x352_int8_nv12 --run
+```
+
+Omit `--run` to generate configuration only; use a new output directory. The configuration requests
+bayes-e, NV12 BT601 video range, a single 1/255 scale, INT8 and latency/O3. `compiled.json` is written
+only after SDK execution and node/input audits pass. HB/X5 validation remains a separate step.
+Local CPU, ONNX and configuration checks do not establish product accuracy or board acceptance.
+
+The upstream base is `3d75949c41f78a2c6763eb347ac7a94793098e89` (8.4.175). Adapters were migrated from
+[tinydet-legacy](https://github.com/Jinlong-cs/tinydet-legacy) at `7e9a16edd4ae25c8301a6fba82e57b4ae518a4e1`.
+Raw-head/Attention export code derives from [D-Robotics](https://github.com/D-Robotics/rdk_model_zoo/blob/rdk_x5/samples/vision/ultralytics_yolo/conversion/export_monkey_patch.py);
+attribution and its [Apache-2.0 license](tinydet/LICENSE-D-Robotics) are retained.
+The upstream README and [AGPL-3.0 license](LICENSE) are preserved below.
+
+---
 
 <div align="center">
   <p>
