@@ -1,0 +1,20 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+FROM pytorch/pytorch:2.7.1-cuda12.8-cudnn9-runtime
+
+RUN apt-get update && apt-get install -y --no-install-recommends git libgl1 libglib2.0-0 && \
+    rm -rf /var/lib/apt/lists/*
+
+ARG USER_UID=1000
+RUN useradd --create-home --uid "$USER_UID" trainer
+
+ENV TINY_WORK_DIR=/workspace/work \
+    PYTHONUSERBASE=/workspace/work/python \
+    PIP_CACHE_DIR=/workspace/work/cache/pip \
+    TMPDIR=/workspace/work/tmp \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH=/workspace/work/python/bin:$PATH
+
+WORKDIR /workspace
+USER trainer
+CMD ["bash"]

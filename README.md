@@ -11,11 +11,50 @@ Detection adapters live in `tinydet/`. See [TinySeg](#tinyseg-yolo26n-sem) for s
 
 ### Setup
 
-Use Python 3.11+ and install this checkout:
+Clone the repository on the training host. These commands assume #1 has merged into `main`;
+for review before merging, use `-b feat/tinyseg-data-contract` instead of `-b main`.
+Use an ordinary clone so Git metadata is available inside the container.
 
 ```bash
 git clone -b main https://github.com/Jinlong-cs/tinyperception.git
 cd tinyperception
+```
+
+#### Docker or Dev Container
+
+Use an x86-64 Linux host with an NVIDIA GPU, a driver compatible with CUDA 12.8, Docker and the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+The training image uses official PyTorch 2.7.1/CUDA 12.8, which supports
+[Blackwell GPUs](https://pytorch.org/blog/pytorch-2-7/). It is separate from the X5 compilation image.
+
+From a non-root host account:
+
+```bash
+nvidia-smi
+docker build --build-arg USER_UID="$(id -u)" -f docker/Dockerfile-tinydet -t tinyperception-train:cu128 docker
+docker run --rm -it --gpus all --shm-size=8g \
+  -v "$PWD:/workspace" -w /workspace tinyperception-train:cu128
+```
+
+Inside the container, install the mounted checkout. Packages, caches and outputs persist under `work/`:
+
+```bash
+mkdir -p work/tmp work/cache/pip work/weights
+python -m pip install --user -e ".[tinydet]"
+python -c "import torch; assert torch.cuda.is_available(); print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0)); print(torch.ones(1, device='cuda') + 1)"
+python -m pip freeze > work/environment.txt
+```
+
+For VS Code, open the clone on the GPU host and select **Dev Containers: Reopen in Container → TinyDet (CUDA)**.
+The Dev Container uses the same Dockerfile and installs the checkout automatically; run the GPU check above.
+From a Mac, first open the host folder with Remote - SSH. The CUDA container runs on that Linux host.
+After rebuilding or recloning, reinstall the current checkout. Do not reuse `work/python/` across Python/CUDA environments.
+
+#### Local Python alternative
+
+Use Python 3.11+ with PyTorch appropriate for the host GPU. CPU preparation and smoke runs also work:
+
+```bash
 python3.11 -m venv venv
 source venv/bin/activate
 export TINY_WORK_DIR="$PWD/work"
@@ -28,9 +67,30 @@ python -m pip install -e ".[tinydet]"
 
 ### Data preparation
 
-Provide an ordered `classes.json`, such as `["person", "chair"]`, and YOLO labels in
+Keep source data and generated artifacts under the ignored `work/` directory:
+
+```text
+work/
+  raw/toc-v1/
+    classes.json
+    source.jsonl
+    images/001.png, 002.png, ...
+    labels/001.txt, 002.txt, ...
+  weights/yolo11n.pt
+  data/toc-v1/              # generated
+  train/toc-yolo11n-v1/     # generated
+```
+
+Raw data can live elsewhere if it is mounted inside the container; manifest paths must resolve there.
+Prepare data inside the same environment and at the same mount path used for training and resume:
+generated `data.yaml` contains absolute paths. Create the raw/weights directories, but do not pre-create
+the generated dataset or training run directory.
+
+Provide an ordered `classes.json`, such as `["person", "chair"]`, and YOLO detection labels in
 `class_id cx cy width height` format with normalized coordinates. Empty label files must be
-reviewed negatives; missing files raise an error. JSONL paths are relative to the manifest:
+reviewed negatives; missing files raise an error. Semantic masks are not detection labels.
+Each label row's class ID is the zero-based index in `classes.json`; for example, `1 0.5 0.5 0.2 0.3`
+labels a chair with normalized center and width/height. JSONL paths are relative to `source.jsonl`:
 
 ```jsonl
 {"id":"001","split":"train","domain":"toc/front","group":"session_a","image":"images/001.png","label":"labels/001.txt"}
@@ -42,37 +102,50 @@ Normalized boxes retain their coordinates. Split by capture sequence; groups and
 cannot cross train/val. Partial labels, ignore regions and a separate test split are not supported.
 
 ```bash
-python -m tinydet.prepare_data --manifest /path/to/source.jsonl \
-  --classes /path/to/classes.json --out work/data
+python -m tinydet.prepare_data --manifest work/raw/toc-v1/source.jsonl \
+  --classes work/raw/toc-v1/classes.json --out work/data/toc-v1
 ```
 
 The output directory must not exist. It contains matching images/labels, `data.yaml`,
 `classes.json`, `dataset.json` and a manifest with source/output hashes. Training validates the
-prepared file set and class order; interrupted runs require the original data and output directory.
+prepared file set and class order. For data or label changes, prepare a new version directory instead of
+editing generated files. Dataset/class changes do not require Python code changes.
 
 ### Training
 
 Place trusted official [YOLO11n weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt)
 in `work/weights/yolo11n.pt` (SHA256 `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1`).
-Weights are not downloaded automatically; `--model` accepts another local checkpoint.
+The initial training checkpoint is not downloaded automatically. `--model` also accepts local official
+[YOLO11s weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt) or a compatible checkpoint;
+switching n/s needs no code change. Upstream GPU AMP checks may download a separate `yolo26n.pt` once.
 
 ```bash
-python -m tinydet.train --data work/data/data.yaml --out work/train --device 0
+python -m tinydet.train --data work/data/toc-v1/data.yaml --model work/weights/yolo11n.pt \
+  --out work/train/toc-yolo11n-v1 --device 0 --epochs 200 --patience 40 --batch 32 --workers 4
 # Resume an interrupted run with the original data, output directory and device environment.
-python -m tinydet.train --data work/data/data.yaml --model work/train/weights/resume.pt \
-  --out work/train --device 0 --resume
+python -m tinydet.train --data work/data/toc-v1/data.yaml \
+  --model work/train/toc-yolo11n-v1/weights/resume.pt --out work/train/toc-yolo11n-v1 --device 0 --resume
 ```
 
 Training and validation use RGB NCHW 352×640 inputs scaled to 0–1. Only one device is supported;
 use `--device cpu` for CPU. The full `resume.pt` retains optimizer/EMA/scaler state.
-See each module's `--help` for additional options.
+The initial recipe uses AdamW, lr0=0.001, cosine scheduling and seed 42; mosaic/mixup/cutmix and multiscale
+are disabled. Epochs, patience, batch size and workers are CLI options. Changing the optimizer, learning
+rate, input contract or architecture requires a code/model configuration change.
+
+Each run writes `weights/best.pt`, `weights/last.pt`, `weights/resume.pt`, `results.csv`, `args.yaml`
+and `provenance.json`. Use `best.pt` for export. `--resume` restores an interrupted run; to continue from
+a completed run, start a new output directory with `--model <previous-run>/weights/best.pt` instead.
+Keep the data, class order, checkpoint, source revision and `work/environment.txt` with each experiment.
+See each module's `--help` for additional options. Container configuration is statically checked;
+building it and training on CUDA have not yet been validated for this PR.
 
 ### ONNX export and X5 compilation
 
 ```bash
-python -m tinydet.export --checkpoint work/train/weights/best.pt \
-  --check-manifest work/data/manifest.jsonl --out work/export
-python -m tinydet.quantization.prepare_calibration --manifest work/data/manifest.jsonl \
+python -m tinydet.export --checkpoint work/train/toc-yolo11n-v1/weights/best.pt \
+  --check-manifest work/data/toc-v1/manifest.jsonl --out work/export
+python -m tinydet.quantization.prepare_calibration --manifest work/data/toc-v1/manifest.jsonl \
   --count 512
 ```
 

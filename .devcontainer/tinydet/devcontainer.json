@@ -1,0 +1,13 @@
+{
+  "name": "TinyDet (CUDA)",
+  "build": {
+    "dockerfile": "../../docker/Dockerfile-tinydet",
+    "context": "../../docker"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "trainer",
+  "runArgs": ["--gpus", "all", "--shm-size=8g"],
+  "postCreateCommand": "mkdir -p work/tmp work/cache/pip work/weights && python -m pip install --user -e '.[tinydet]'",
+  "waitFor": "postCreateCommand"
+}
