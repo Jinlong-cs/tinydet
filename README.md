@@ -87,8 +87,8 @@ RGB 0–255 float32 CHW values, and the mapper applies 1/255 once. Export record
 hashes; calibration records source-manifest, sample and RGB-file hashes.
 
 Calibration defaults to `tinydet/quantization/calib_data/`, with `.rgb` files in `rgb/` and a
-`manifest.json` beside it. The directory must be empty apart from `.gitkeep`; generated files are
-ignored by Git. Use `--out` and the compiler's `--calibration` to override these script-relative defaults.
+`manifest.json` beside it. The script creates the directory if absent and rejects nonempty output.
+The directory is ignored by Git. Use `--out` and the compiler's `--calibration` to override these script-relative defaults.
 
 Both workflows use [tinydet/quantization/config.yaml](tinydet/quantization/config.yaml) and an x86 Linux OpenExplorer v1.2.8 environment.
 
