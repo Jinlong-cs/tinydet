@@ -134,7 +134,8 @@ venv.bak/
 
 # VSCode project settings
 .vscode/
-.devcontainer/
+.devcontainer/*
+!.devcontainer/tinydet/
 
 # Rope project settings
 .ropeproject
