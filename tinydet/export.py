@@ -9,7 +9,7 @@ import copy
 import types
 from pathlib import Path
 
-from .common import UPSTREAM, check_upstream, read_manifest, rgb_input, sha256, source_provenance, write_json
+from .common import UPSTREAM, WORK, check_upstream, read_manifest, rgb_input, sha256, source_provenance, write_json
 
 # isort: split
 
@@ -186,6 +186,6 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--checkpoint", required=True)
     p.add_argument("--check-manifest", required=True)
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", default=str(WORK / "export"), help="Output directory (default: %(default)s)")
     p.add_argument("--limit", type=int, default=64)
     export(p.parse_args())

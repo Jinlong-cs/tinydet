@@ -145,10 +145,16 @@ building it and training on CUDA have not yet been validated for this PR.
 
 ```bash
 python -m tinydet.export --checkpoint work/train/toc-yolo11n-v1/weights/best.pt \
-  --check-manifest work/data/toc-v1/manifest.jsonl --out work/export
+  --check-manifest work/data/toc-v1/manifest.jsonl
 python -m tinydet.quantization.prepare_calibration --manifest work/data/toc-v1/manifest.jsonl \
   --count 512
 ```
+
+From the repository root, export defaults to `work/export/model.onnx`, with `classes.json` and `export.json`
+beside it. The standard container sets `TINY_WORK_DIR=/workspace/work`, matching
+`model_parameters.onnx_model: /workspace/work/export/model.onnx` in `tinydet/quantization/config.yaml`.
+The output directory must not exist. Use a new `--out` for another export; if you change `--out` or
+`TINY_WORK_DIR`, update the manual YAML/checker path and the Python compiler's `--onnx` accordingly.
 
 The opset11 graph accepts FLOAT32 `[1,3,352,640]` and returns
 `cls_s8, box_s8, cls_s16, box_s16, cls_s32, box_s32`. Grids are 44×80, 22×40 and 11×20;
