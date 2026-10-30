@@ -67,7 +67,8 @@ python -m pip install -e ".[tinydet]"
 
 ### Data preparation
 
-Keep source data and generated artifacts under the ignored `work/` directory:
+Keep source data and generated artifacts under `work/`. Only the bundled `weights/yolo11n.pt` is tracked;
+other contents are ignored by Git:
 
 ```text
 work/
@@ -113,9 +114,9 @@ editing generated files. Dataset/class changes do not require Python code change
 
 ### Training
 
-Place trusted official [YOLO11n weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt)
-in `work/weights/yolo11n.pt` (SHA256 `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1`).
-The initial training checkpoint is not downloaded automatically. `--model` also accepts local official
+The repository includes the official [YOLO11n weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt)
+at `work/weights/yolo11n.pt` (SHA256 `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1`).
+Cloning provides the default training checkpoint; no separate download is needed. `--model` also accepts local official
 [YOLO11s weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt) or a compatible checkpoint;
 switching n/s needs no code change. Upstream GPU AMP checks may download a separate `yolo26n.pt` once.
 
