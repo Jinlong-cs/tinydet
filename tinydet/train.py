@@ -22,7 +22,7 @@ class FixedDataset(YOLODataset):
     def get_labels(self):
         labels = super().get_labels()
         if any(tuple(label["shape"]) != (352, 640) for label in labels):
-            raise ValueError("Run prepare_data.py first; all train/val images must be 640x352")
+            raise ValueError("Run tinydet.data.prepare_data first; all train/val images must be 640x352")
         return labels
 
 
@@ -197,7 +197,7 @@ def main(args):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--data", required=True, help="data.yaml produced by prepare_data.py")
+    p.add_argument("--data", required=True, help="data.yaml produced by tinydet.data.prepare_data")
     p.add_argument(
         "--model", default=str(WORK / "weights" / "yolo11n.pt"), help="Local trusted checkpoint; never auto-downloaded"
     )

@@ -9,7 +9,7 @@ from pathlib import Path
 from time import perf_counter
 
 from .common import HEIGHT, WIDTH, check_upstream, rgb_input, sha256, source_provenance
-from .export import NAMES, decode_all
+from .export.export import NAMES, decode_all
 
 # isort: split
 
@@ -67,7 +67,7 @@ class Detector:
             ] or [(x.name, x.shape, x.type) for x in self.model.get_outputs()] != expected:
                 raise ValueError("Expected TinyDet FLOAT32 352x640 input and six raw class/DFL heads")
         else:
-            raise ValueError("Use a local .pt checkpoint or the .onnx produced by tinydet.export")
+            raise ValueError("Use a local .pt checkpoint or the .onnx produced by tinydet.export.export")
         if (
             not isinstance(self.names, list)
             or not self.names
