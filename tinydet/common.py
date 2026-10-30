@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Shared input contract and provenance; no model download on import."""
 
 import hashlib
 import json
@@ -26,7 +25,6 @@ os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
 
 
 def sha256(path):
-    """Hash a file without loading it into memory."""
     with Path(path).open("rb") as f:
         digest = hashlib.sha256()
         for block in iter(lambda: f.read(1024 * 1024), b""):
@@ -35,12 +33,10 @@ def sha256(path):
 
 
 def write_json(path, value):
-    """Write a UTF-8 JSON record."""
     Path(path).write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
 
 
 def read_manifest(path):
-    """Resolve image/label/mask paths relative to a JSONL manifest."""
     path = Path(path).resolve()
     rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     ids = set()
@@ -60,7 +56,6 @@ def read_manifest(path):
 
 
 def rgb_input(path, normalize=True):
-    """Resize a supported image to RGB CHW 352x640."""
     import cv2
     import numpy as np
 
@@ -73,7 +68,6 @@ def rgb_input(path, normalize=True):
 
 
 def check_upstream():
-    """Require this checkout's supported Ultralytics source."""
     import ultralytics
 
     if Path(ultralytics.__file__).resolve() != REPO / "ultralytics" / "__init__.py":
@@ -85,7 +79,6 @@ def check_upstream():
 
 
 def source_provenance():
-    """Record the actual checkout identity alongside the original upstream base."""
 
     def git(*args):
         return subprocess.check_output(["git", "-C", str(REPO), *args], text=True).strip()

@@ -19,10 +19,7 @@ from ultralytics.models.yolo.detect import DetectionTrainer, DetectionValidator
 
 
 class FixedDataset(YOLODataset):
-    """Load detection data prepared at the deployment resolution."""
-
     def get_labels(self):
-        """Load native labels and require prepared image dimensions."""
         labels = super().get_labels()
         if any(tuple(label["shape"]) != (352, 640) for label in labels):
             raise ValueError("Run prepare_data.py first; all train/val images must be 640x352")
@@ -30,7 +27,6 @@ class FixedDataset(YOLODataset):
 
 
 def fixed_dataset(args, path, data, mode, batch):
-    """Build rectangular batches without square padding."""
     dataset = FixedDataset(
         img_path=path,
         imgsz=640,
@@ -51,42 +47,33 @@ def fixed_dataset(args, path, data, mode, batch):
 
 
 class FixedValidator(DetectionValidator):
-    """Validate with the same geometry used for training and deployment."""
-
     def preprocess(self, batch):
-        """Apply native preprocessing and verify the tensor shape."""
         batch = super().preprocess(batch)
         if tuple(batch["img"].shape[1:]) != (3, 352, 640):
             raise ValueError("Validation input must be NCHW 352x640")
         return batch
 
     def build_dataset(self, img_path, mode="val", batch=None):
-        """Build fixed-resolution validation data."""
         return fixed_dataset(self.args, img_path, self.data, mode, batch)
 
 
 class FixedTrainer(DetectionTrainer):
-    """Reuse the native training loop with fixed-resolution data hooks."""
-
     def preprocess_batch(self, batch):
-        """Apply native preprocessing and verify the tensor shape."""
         batch = super().preprocess_batch(batch)
         if tuple(batch["img"].shape[1:]) != (3, 352, 640):
             raise ValueError("Training input must be NCHW 352x640")
         return batch
 
     def build_dataset(self, img_path, mode="train", batch=None):
-        """Build fixed-resolution training data."""
         return fixed_dataset(self.args, img_path, self.data, mode, batch)
 
     def get_validator(self):
-        """Use the matching fixed-resolution validator."""
         self.loss_names = "box_loss", "cls_loss", "dfl_loss"
         return FixedValidator(self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks)
 
 
 def preserve_resume(trainer):
-    """Preserve the checkpoint before upstream strips optimizer state from last/best."""
+    # Keep optimizer state before upstream strips last/best.
     target = trainer.save_dir / "weights" / "resume.pt"
     temporary = target.with_suffix(".part")
     shutil.copyfile(trainer.last, temporary)
@@ -94,7 +81,6 @@ def preserve_resume(trainer):
 
 
 def validate_data(data):
-    """Bind the official trainer's YAML to exactly the prepared images, labels and classes."""
     import yaml
 
     data = Path(data).resolve()
@@ -132,7 +118,6 @@ def validate_data(data):
 
 
 def check_training_run(output, identity, resume, model_path):
-    """Reject changed data or a different run before official resume restores its arguments."""
     output, model_path = Path(output).resolve(), Path(model_path).resolve()
     if not resume:
         if output.exists():
@@ -146,7 +131,6 @@ def check_training_run(output, identity, resume, model_path):
 
 
 def main(args):
-    """Run single-device training against a frozen prepared dataset."""
     check_upstream()
     if "," in args.device:
         raise ValueError("TinyDet currently supports a single GPU or CPU/MPS; multi-GPU resume is not supported")
