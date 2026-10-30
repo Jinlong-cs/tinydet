@@ -193,31 +193,10 @@ def compile_model(args):
     if not args.name.replace("_", "").replace("-", "").isalnum():
         raise ValueError("Model prefix must contain only letters, digits, underscores or hyphens")
     out.mkdir(parents=True, exist_ok=False)
-    config = {
-        "model_parameters": {
-            "onnx_model": str(model),
-            "march": "bayes-e",
-            "layer_out_dump": False,
-            "working_dir": str(out),
-            "output_model_file_prefix": args.name,
-        },
-        "input_parameters": {
-            "input_name": "images",
-            "input_type_rt": "nv12",
-            "input_space_and_range": "bt601_video",
-            "input_type_train": "rgb",
-            "input_layout_train": "NCHW",
-            "norm_type": "data_scale",
-            "scale_value": 1 / 255,
-        },
-        "calibration_parameters": {
-            "cal_data_dir": str(cal),
-            "cal_data_type": "float32",
-            "calibration_type": "default",
-            "optimization": "set_all_nodes_int8",
-        },
-        "compiler_parameters": {"jobs": args.jobs, "compile_mode": "latency", "debug": True, "optimize_level": "O3"},
-    }
+    config = yaml.safe_load(Path(__file__).with_name("config.yaml").read_text())
+    config["model_parameters"].update(onnx_model=str(model), working_dir=str(out), output_model_file_prefix=args.name)
+    config["calibration_parameters"]["cal_data_dir"] = str(cal)
+    config["compiler_parameters"]["jobs"] = args.jobs
     path = out / "config.yaml"
     path.write_text(yaml.safe_dump(config, sort_keys=False))
     (out / "classes.json").write_bytes(classes_path.read_bytes())
@@ -234,7 +213,7 @@ def compile_model(args):
             "calibration_files": len(files),
             "calibration_manifest_sha256": sha256(receipt_path),
             "calibration_sha256": hashes,
-            "requested_precision": "all INT8",
+            "requested_precision": config["calibration_parameters"]["optimization"],
             "actual_precision": "not audited; inspect compiler node report",
             "executed": False,
         },
