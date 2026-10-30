@@ -72,7 +72,7 @@ See each module's `--help` for additional options.
 ```bash
 python -m tinydet.export --checkpoint work/train/weights/best.pt \
   --check-manifest work/data/manifest.jsonl --out work/export
-python -m tinydet.x5 calibrate --manifest work/data/manifest.jsonl \
+python -m tinydet.x5_compile calibrate --manifest work/data/manifest.jsonl \
   --count 512 --out work/calibration
 ```
 
@@ -86,15 +86,20 @@ Calibration uses train samples only; `--count` cannot exceed the train set size.
 RGB 0–255 float32 CHW values, and the mapper applies 1/255 once. Export records source, class and model
 hashes; calibration records source-manifest, sample and RGB-file hashes.
 
-Run the compiler in an x86 Linux OpenExplorer v1.2.8 environment:
+Both workflows use [tinydet/config.yaml](tinydet/config.yaml) and an x86 Linux OpenExplorer v1.2.8 environment.
 
 ```bash
 IMAGE=registry.d-robotics.cc/deliver/hub.hobot.cc/aitools/ai_toolchain_ubuntu_20_x5_cpu:v1.2.8
+```
+
+#### Automatic compilation
+
+```bash
 docker run --rm --cpus=4 --memory=16g \
   -v "$PWD:/workspace" -w /workspace \
   -e TINY_WORK_DIR=/workspace/work -e PYTHONDONTWRITEBYTECODE=1 \
   -e OMP_NUM_THREADS=4 -e OPENBLAS_NUM_THREADS=4 \
-  "$IMAGE" python3 -m tinydet.x5 compile \
+  "$IMAGE" python3 -m tinydet.x5_compile compile \
   --onnx work/export/model.onnx --calibration work/calibration/rgb \
   --out work/ptq --name yolo11n_640x352_int8_nv12 --run
 ```
@@ -103,6 +108,35 @@ Omit `--run` to generate configuration only; use a new output directory. The con
 bayes-e, NV12 BT601 video range, a single 1/255 scale, INT8 and latency/O3. `compiled.json` is written
 only after SDK execution and node/input audits pass. HB/X5 validation remains a separate step.
 Local CPU, ONNX and configuration checks do not establish product accuracy or board acceptance.
+
+#### Manual compilation
+
+Edit `tinydet/config.yaml` with paths visible inside the SDK container. Its defaults match the export
+and calibration directories above and write to `work/ptq-manual`. The Python workflow loads the same
+defaults, then overrides model/calibration/output paths, model name and jobs from its CLI arguments.
+
+From the repository root, open the same SDK image:
+
+```bash
+docker run --rm -it --cpus=4 --memory=16g \
+  -v "$PWD:/workspace" -w /workspace \
+  -e OMP_NUM_THREADS=4 -e OPENBLAS_NUM_THREADS=4 "$IMAGE" bash
+```
+
+Inside the container:
+
+```bash
+mkdir -p /workspace/work/ptq-manual
+cd /workspace/work/ptq-manual
+hb_mapper checker --model-type onnx --model /workspace/work/export/model.onnx --march bayes-e
+hb_mapper makertbin --config /workspace/tinydet/config.yaml --model-type onnx
+hb_model_info /workspace/work/ptq-manual/yolo11n_640x352_int8_nv12.bin
+```
+
+Use a fresh output directory and update the commands if you change the YAML paths or model name.
+Keep calibration as RGB float32 CHW values in 0–255; the YAML applies 1/255 once. This direct SDK path
+does not perform the Python wrapper's provenance checks or write `compiled.json`; retain the SDK logs
+and verify actual precision, placement and NV12 BT601 video range before board validation.
 
 The upstream base is `922563eab42b778445e55a2edbabb6974eed8e4b` (8.4.192). Adapters were migrated from
 [tinydet-legacy](https://github.com/Jinlong-cs/tinydet-legacy) at `7e9a16edd4ae25c8301a6fba82e57b4ae518a4e1`.

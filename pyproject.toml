@@ -196,7 +196,7 @@ ultralytics = "ultralytics.cfg:entrypoint"
 # Tools settings -------------------------------------------------------------------------------------------------------
 [tool.setuptools]  # configuration specific to the `setuptools` build backend.
 packages = { find = { where = ["."], include = ["ultralytics", "ultralytics.*", "tinydet", "tinydet.*"] } }
-package-data = { "ultralytics" = ["**/*.yaml", "**/*.sh"], "ultralytics.assets" = ["*.jpg"], "ultralytics.solutions.templates" = ["*.html"], "tinydet" = ["LICENSE-D-Robotics"]}
+package-data = { "ultralytics" = ["**/*.yaml", "**/*.sh"], "ultralytics.assets" = ["*.jpg"], "ultralytics.solutions.templates" = ["*.html"], "tinydet" = ["LICENSE-D-Robotics", "config.yaml"]}
 
 [tool.setuptools.dynamic]
 version = { attr = "ultralytics.__version__" }
