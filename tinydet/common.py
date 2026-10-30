@@ -55,13 +55,13 @@ def read_manifest(path):
     return rows
 
 
-def rgb_input(path, normalize=True):
+def rgb_input(source, normalize=True):
     import cv2
     import numpy as np
 
-    image = cv2.imread(str(path))
-    if image is None or image.shape not in {(352, 640, 3), (480, 640, 3), (512, 640, 3)}:
-        raise ValueError(f"Expected 640x352, 640x480 or 640x512 image: {path}")
+    image = cv2.imread(str(source)) if isinstance(source, (str, os.PathLike)) else source
+    if image is None or image.dtype != np.uint8 or image.shape not in {(352, 640, 3), (480, 640, 3), (512, 640, 3)}:
+        raise ValueError("Expected a uint8 BGR 640x352, 640x480 or 640x512 image")
     image = cv2.resize(image, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
     result = np.ascontiguousarray(image[:, :, ::-1].transpose(2, 0, 1), dtype=np.float32)
     return result / 255 if normalize else result

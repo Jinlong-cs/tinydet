@@ -140,6 +140,39 @@ Keep the data, class order, checkpoint, source revision and `work/environment.tx
 See each module's `--help` for additional options. Container configuration is statically checked;
 building it and training on CUDA have not yet been validated for this PR.
 
+### CPU evaluation and prediction
+
+Evaluate a trained PT checkpoint or its raw-head ONNX export on the full prepared validation split:
+
+```bash
+python -m tinydet.eval --model work/train/toc-yolo11n-v1/weights/best.pt \
+  --data work/data/toc-v1/data.yaml --out work/eval/toc-pt
+python -m tinydet.eval --model work/export/model.onnx \
+  --data work/data/toc-v1/data.yaml --out work/eval/toc-onnx
+python -m tinydet.predict --model work/export/model.onnx \
+  --source work/raw/toc.mp4 --out work/predict/toc-onnx
+```
+
+ONNX inputs must come from `tinydet.export`, with matching `export.json` and `classes.json` beside the model.
+Evaluation requires exact model/dataset class order; the bundled COCO80 initializer cannot evaluate ToC55 labels.
+Prediction accepts one image, a flat image directory or one video. It writes annotated JPEGs or `visualization.mp4`
+at the original size, `predictions.jsonl` with original-image pixel boxes, and `report.json`.
+Evaluation writes `metrics.json` and `predictions.jsonl` with boxes in the prepared 640×352 coordinates.
+Use a new output directory for every run.
+
+Both paths use batch-one CPU inference, full-frame LINEAR resize to 640×352, RGB/255, class-aware NMS and clipped boxes.
+Defaults are `--iou 0.7 --max-det 300 --threads 4 --warmup 5`; `--multi-label` enables multiple classes per candidate.
+Evaluation uses `--conf 0.001` for AP curves; prediction uses `--conf 0.25`. Use identical thresholds when comparing
+latency or detections. Training validation defaults to multi-label NMS and does not clip boxes, so its metrics can differ.
+
+Overall/per-class P, R and AP use the official matching and metric implementations. P/R are reported at the best
+mean-F1 confidence point; per-class prediction/false-positive counts use the configured threshold.
+Classes with no ground truth have null metrics and are excluded from mAP; their false positives are still counted.
+Reports include model/class/source identity, runtime versions, host architecture and stage mean/p50/p95/max milliseconds.
+Timing excludes model loading, warmup, file I/O, metric computation, drawing and encoding. PT forward includes native
+DFL decoding; ONNX decoding is counted in postprocessing. Compare total time when comparing these backends.
+These are host CPU measurements, not X5 latency.
+
 ### ONNX export and X5 compilation
 
 ```bash
