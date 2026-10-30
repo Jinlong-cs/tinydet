@@ -73,7 +73,6 @@ other contents are ignored by Git:
 ```text
 work/
   raw/toc-v1/
-    classes.json
     source.jsonl
     images/001.png, 002.png, ...
     labels/001.txt, 002.txt, ...
@@ -87,11 +86,11 @@ Prepare data inside the same environment and at the same mount path used for tra
 generated `data.yaml` contains absolute paths. Create the raw/weights directories, but do not pre-create
 the generated dataset or training run directory.
 
-Provide an ordered `classes.json`, such as `["person", "chair"]`, and YOLO detection labels in
-`class_id cx cy width height` format with normalized coordinates. Empty label files must be
-reviewed negatives; missing files raise an error. Semantic masks are not detection labels.
-Each label row's class ID is the zero-based index in `classes.json`; for example, `1 0.5 0.5 0.2 0.3`
-labels a chair with normalized center and width/height. JSONL paths are relative to `source.jsonl`:
+Use the 55 ToC classes in [tinydet/labels.json](tinydet/labels.json); see [label definitions](tinydet/docs/labels.md)
+for Chinese names and annotation rules. YOLO labels use `class_id cx cy width height` with normalized coordinates.
+Class IDs are the zero-based array indices (0–54), not COCO IDs; `1 0.5 0.5 0.2 0.3` labels a chair.
+Empty label files must be reviewed negatives; missing files raise an error. Semantic masks are not detection labels.
+Other datasets may pass their own ordered JSON list to `--classes`. JSONL paths are relative to `source.jsonl`:
 
 ```jsonl
 {"id":"001","split":"train","domain":"toc/front","group":"session_a","image":"images/001.png","label":"labels/001.txt"}
@@ -104,7 +103,7 @@ cannot cross train/val. Partial labels, ignore regions and a separate test split
 
 ```bash
 python -m tinydet.prepare_data --manifest work/raw/toc-v1/source.jsonl \
-  --classes work/raw/toc-v1/classes.json --out work/data/toc-v1
+  --classes tinydet/labels.json --out work/data/toc-v1
 ```
 
 The output directory must not exist. It contains matching images/labels, `data.yaml`,
