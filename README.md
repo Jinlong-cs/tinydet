@@ -72,7 +72,7 @@ See each module's `--help` for additional options.
 ```bash
 python -m tinydet.export --checkpoint work/train/weights/best.pt \
   --check-manifest work/data/manifest.jsonl --out work/export
-python -m tinydet.x5_compile calibrate --manifest work/data/manifest.jsonl \
+python -m tinydet.quantization.prepare_calibration --manifest work/data/manifest.jsonl \
   --count 512 --out work/calibration
 ```
 
@@ -86,7 +86,7 @@ Calibration uses train samples only; `--count` cannot exceed the train set size.
 RGB 0–255 float32 CHW values, and the mapper applies 1/255 once. Export records source, class and model
 hashes; calibration records source-manifest, sample and RGB-file hashes.
 
-Both workflows use [tinydet/config.yaml](tinydet/config.yaml) and an x86 Linux OpenExplorer v1.2.8 environment.
+Both workflows use [tinydet/quantization/config.yaml](tinydet/quantization/config.yaml) and an x86 Linux OpenExplorer v1.2.8 environment.
 
 ```bash
 IMAGE=registry.d-robotics.cc/deliver/hub.hobot.cc/aitools/ai_toolchain_ubuntu_20_x5_cpu:v1.2.8
@@ -99,7 +99,7 @@ docker run --rm --cpus=4 --memory=16g \
   -v "$PWD:/workspace" -w /workspace \
   -e TINY_WORK_DIR=/workspace/work -e PYTHONDONTWRITEBYTECODE=1 \
   -e OMP_NUM_THREADS=4 -e OPENBLAS_NUM_THREADS=4 \
-  "$IMAGE" python3 -m tinydet.x5_compile compile \
+  "$IMAGE" python3 -m tinydet.quantization.x5_compile \
   --onnx work/export/model.onnx --calibration work/calibration/rgb \
   --out work/ptq --name yolo11n_640x352_int8_nv12 --run
 ```
@@ -111,7 +111,7 @@ Local CPU, ONNX and configuration checks do not establish product accuracy or bo
 
 #### Manual compilation
 
-Edit `tinydet/config.yaml` with paths visible inside the SDK container. Its defaults match the export
+Edit `tinydet/quantization/config.yaml` with paths visible inside the SDK container. Its defaults match the export
 and calibration directories above and write to `work/ptq-manual`. The Python workflow loads the same
 defaults, then overrides model/calibration/output paths, model name and jobs from its CLI arguments.
 
@@ -129,7 +129,7 @@ Inside the container:
 mkdir -p /workspace/work/ptq-manual
 cd /workspace/work/ptq-manual
 hb_mapper checker --model-type onnx --model /workspace/work/export/model.onnx --march bayes-e
-hb_mapper makertbin --config /workspace/tinydet/config.yaml --model-type onnx
+hb_mapper makertbin --config /workspace/tinydet/quantization/config.yaml --model-type onnx
 hb_model_info /workspace/work/ptq-manual/yolo11n_640x352_int8_nv12.bin
 ```
 
@@ -141,7 +141,7 @@ and verify actual precision, placement and NV12 BT601 video range before board v
 The upstream base is `922563eab42b778445e55a2edbabb6974eed8e4b` (8.4.192). Adapters were migrated from
 [tinydet-legacy](https://github.com/Jinlong-cs/tinydet-legacy) at `7e9a16edd4ae25c8301a6fba82e57b4ae518a4e1`.
 Raw-head/Attention export code derives from [D-Robotics](https://github.com/D-Robotics/rdk_model_zoo/blob/rdk_x5/samples/vision/ultralytics_yolo/conversion/export_monkey_patch.py);
-attribution and its [Apache-2.0 license](tinydet/LICENSE-D-Robotics) are retained.
+attribution and its [Apache-2.0 license](tinydet/docs/LICENSE-D-Robotics) are retained.
 The upstream README and [AGPL-3.0 license](LICENSE) are preserved below.
 
 ---

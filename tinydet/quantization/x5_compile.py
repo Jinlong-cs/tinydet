@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-only
-"""Train-only calibration and explicit Horizon X5 INT8 compilation."""
+"""Compile and audit Horizon X5 INT8 models."""
 
 import argparse
 import collections
@@ -8,54 +8,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from .common import UPSTREAM, read_manifest, rgb_input, sha256, write_json
-
-
-def calibrate(args):
-    import numpy as np
-
-    rows = [r for r in read_manifest(args.manifest) if r["split"] == "train"]
-    if not 0 < args.count <= len(rows):
-        raise ValueError("Calibration count must not exceed unique train samples")
-    rng = np.random.default_rng(42)
-    groups = {}
-    for row in rows:
-        groups.setdefault(row.get("domain", "default"), []).append(row)
-    for group in groups.values():
-        rng.shuffle(group)
-    selected = []
-    while len(selected) < args.count:
-        for domain in sorted(groups):
-            if groups[domain] and len(selected) < args.count:
-                selected.append(groups[domain].pop())
-    out = Path(args.out).resolve()
-    out.mkdir(parents=True, exist_ok=False)
-    data_dir = out / "rgb"
-    data_dir.mkdir()
-    receipt = []
-    for i, row in enumerate(selected):
-        target = data_dir / f"{i:05}.rgb"
-        rgb_input(row["image"], normalize=False).tofile(target)
-        receipt.append(
-            {
-                "file": target.name,
-                "id": row["id"],
-                "split": "train",
-                "domain": row.get("domain", "default"),
-                "image_sha256": sha256(row["image"]),
-                "rgb_sha256": sha256(target),
-            }
-        )
-    write_json(
-        out / "manifest.json",
-        {
-            "source_manifest_sha256": sha256(args.manifest),
-            "layout": "CHW RGB float32 raw 0..255; mapper alone applies 1/255",
-            "shape": [3, 352, 640],
-            "dtype": "float32",
-            "samples": receipt,
-        },
-    )
+from ..common import UPSTREAM, sha256, write_json
 
 
 def audit(out, name):
@@ -242,19 +195,10 @@ def compile_model(args):
 
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
-    sub = p.add_subparsers(dest="command", required=True)
-    c = sub.add_parser("calibrate")
-    c.add_argument("--manifest", required=True)
-    c.add_argument("--out", required=True)
-    c.add_argument("--count", type=int, default=512)
-    c.set_defaults(func=calibrate)
-    c = sub.add_parser("compile")
-    c.add_argument("--onnx", required=True)
-    c.add_argument("--calibration", required=True)
-    c.add_argument("--out", required=True)
-    c.add_argument("--name", required=True)
-    c.add_argument("--jobs", type=int, default=4)
-    c.add_argument("--run", action="store_true", help="Run SDK commands; omitted means generate configuration only")
-    c.set_defaults(func=compile_model)
-    args = p.parse_args()
-    args.func(args)
+    p.add_argument("--onnx", required=True)
+    p.add_argument("--calibration", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--name", required=True)
+    p.add_argument("--jobs", type=int, default=4)
+    p.add_argument("--run", action="store_true", help="Run SDK commands; omitted means generate configuration only")
+    compile_model(p.parse_args())
