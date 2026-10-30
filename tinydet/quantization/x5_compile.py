@@ -196,7 +196,7 @@ def compile_model(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--onnx", required=True)
-    p.add_argument("--calibration", required=True)
+    p.add_argument("--calibration", default=str(Path(__file__).with_name("calib_data") / "rgb"))
     p.add_argument("--out", required=True)
     p.add_argument("--name", required=True)
     p.add_argument("--jobs", type=int, default=4)

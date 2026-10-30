@@ -1,6 +1,8 @@
 # Byte-compiled / optimized / DLL files
 /work/
 /venv/
+/tinydet/quantization/calib_data/*
+!/tinydet/quantization/calib_data/.gitkeep
 __pycache__/
 *.py[cod]
 *$py.class

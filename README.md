@@ -73,7 +73,7 @@ See each module's `--help` for additional options.
 python -m tinydet.export --checkpoint work/train/weights/best.pt \
   --check-manifest work/data/manifest.jsonl --out work/export
 python -m tinydet.quantization.prepare_calibration --manifest work/data/manifest.jsonl \
-  --count 512 --out work/calibration
+  --count 512
 ```
 
 The opset11 graph accepts FLOAT32 `[1,3,352,640]` and returns
@@ -85,6 +85,10 @@ By default, export checks raw heads, decoded boxes and scores on up to 64 valida
 Calibration uses train samples only; `--count` cannot exceed the train set size. Files contain
 RGB 0–255 float32 CHW values, and the mapper applies 1/255 once. Export records source, class and model
 hashes; calibration records source-manifest, sample and RGB-file hashes.
+
+Calibration defaults to `tinydet/quantization/calib_data/`, with `.rgb` files in `rgb/` and a
+`manifest.json` beside it. The directory must be empty apart from `.gitkeep`; generated files are
+ignored by Git. Use `--out` and the compiler's `--calibration` to override these script-relative defaults.
 
 Both workflows use [tinydet/quantization/config.yaml](tinydet/quantization/config.yaml) and an x86 Linux OpenExplorer v1.2.8 environment.
 
@@ -100,7 +104,7 @@ docker run --rm --cpus=4 --memory=16g \
   -e TINY_WORK_DIR=/workspace/work -e PYTHONDONTWRITEBYTECODE=1 \
   -e OMP_NUM_THREADS=4 -e OPENBLAS_NUM_THREADS=4 \
   "$IMAGE" python3 -m tinydet.quantization.x5_compile \
-  --onnx work/export/model.onnx --calibration work/calibration/rgb \
+  --onnx work/export/model.onnx \
   --out work/ptq --name yolo11n_640x352_int8_nv12 --run
 ```
 
