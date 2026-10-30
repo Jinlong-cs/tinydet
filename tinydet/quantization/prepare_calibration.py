@@ -25,7 +25,9 @@ def calibrate(args):
             if groups[domain] and len(selected) < args.count:
                 selected.append(groups[domain].pop())
     out = Path(args.out).resolve()
-    out.mkdir(parents=True, exist_ok=False)
+    out.mkdir(parents=True, exist_ok=True)
+    if any(path.name != ".gitkeep" for path in out.iterdir()):
+        raise FileExistsError(f"Calibration output must be empty: {out}")
     data_dir = out / "rgb"
     data_dir.mkdir()
     receipt = []
@@ -57,6 +59,6 @@ def calibrate(args):
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--manifest", required=True)
-    p.add_argument("--out", required=True)
+    p.add_argument("--out", default=str(Path(__file__).with_name("calib_data")))
     p.add_argument("--count", type=int, default=512)
     calibrate(p.parse_args())
