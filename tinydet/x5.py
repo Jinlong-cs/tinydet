@@ -10,17 +10,13 @@ from pathlib import Path
 
 from .common import UPSTREAM, read_manifest, rgb_input, sha256, write_json
 
-# isort: split
-
 
 def calibrate(args):
-    """Write train-only RGB calibration samples and their hashes."""
     import numpy as np
 
     rows = [r for r in read_manifest(args.manifest) if r["split"] == "train"]
     if not 0 < args.count <= len(rows):
         raise ValueError("Calibration count must not exceed unique train samples")
-    # Round-robin domains without repeating rows, with seeded order inside each domain.
     rng = np.random.default_rng(42)
     groups = {}
     for row in rows:
@@ -63,7 +59,6 @@ def calibrate(args):
 
 
 def audit(out, name):
-    """Read actual placement/precision and input range from compiler artifacts."""
     import onnx
 
     log = re.sub(r"\x1b\[[0-9;]*m", "", (out / "hb_mapper_makertbin.log").read_text())
@@ -110,7 +105,6 @@ def audit(out, name):
 
 
 def compile_model(args):
-    """Validate export inputs and optionally run the X5 compiler."""
     import onnx
     import yaml
 

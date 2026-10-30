@@ -8,11 +8,8 @@ from pathlib import Path
 
 from .common import read_manifest, rgb_input, sha256, write_json
 
-# isort: split
-
 
 def prepare(args):
-    """Prepare fixed-size images, YOLO boxes and split provenance."""
     import cv2
     import numpy as np
     import yaml

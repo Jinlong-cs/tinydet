@@ -26,12 +26,11 @@ NAMES = [f"{kind}_s{stride}" for stride in (8, 16, 32) for kind in ("cls", "box"
 
 
 def raw_forward(self, x):
-    """Return class logits and DFL boxes for each stride."""
     return tuple(t for i in range(self.nl) for t in (self.cv3[i](x[i]), self.cv2[i](x[i])))
 
 
 def bpu_attention(self, x):
-    """Use equivalent attention with a BPU-supported softmax axis on the export copy."""
+    # Move softmax to a BPU-supported axis on the export copy.
     b, c, h, w = x.shape
     q, k, v = (
         self.qkv(x)
@@ -46,7 +45,6 @@ def bpu_attention(self, x):
 
 
 def decode_all(outputs, nc):
-    """Reference DFL decode before threshold/NMS, for numerical export checking only."""
     parts = []
     for j, stride in enumerate((8, 16, 32)):
         cls, box = outputs[2 * j : 2 * j + 2]
@@ -64,7 +62,6 @@ def decode_all(outputs, nc):
 
 
 def export(args):
-    """Export static opset11 heads and check them against the source model."""
     check_upstream()
     source = source_provenance()
     torch.set_num_threads(4)

@@ -250,6 +250,9 @@ docstring-code-format = true
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
+[tool.ruff.lint.per-file-ignores]
+"tinydet/*.py" = ["D101", "D102", "D103"]
+
 [tool.docformatter]
 wrap-summaries = 120
 wrap-descriptions = 120
