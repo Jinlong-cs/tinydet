@@ -117,5 +117,5 @@ def evaluate(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     add_arguments(parser, conf=0.001)
-    parser.add_argument("--data", required=True, help="data.yaml produced by prepare_data.py")
+    parser.add_argument("--data", required=True, help="data.yaml produced by tinydet.data.prepare_data")
     evaluate(parser.parse_args())

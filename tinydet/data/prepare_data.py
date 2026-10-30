@@ -6,7 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from .common import read_manifest, rgb_input, sha256, write_json
+from ..common import read_manifest, rgb_input, sha256, write_json
 
 
 def prepare(args):

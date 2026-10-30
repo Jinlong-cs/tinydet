@@ -8,6 +8,7 @@ Both tasks use the same upstream base and are introduced through separate review
 ## TinyDet (YOLO11n)
 
 Detection adapters live in `tinydet/`. TinySeg data preparation is a separate follow-up PR.
+Data preparation lives in `tinydet/data/`, ONNX export in `tinydet/export/`, and X5 compilation in `tinydet/quantization/`.
 
 ### Setup
 
@@ -102,7 +103,7 @@ Normalized boxes retain their coordinates. Split by capture sequence; groups and
 cannot cross train/val. Partial labels, ignore regions and a separate test split are not supported.
 
 ```bash
-python -m tinydet.prepare_data --manifest work/raw/toc-v1/source.jsonl \
+python -m tinydet.data.prepare_data --manifest work/raw/toc-v1/source.jsonl \
   --classes tinydet/labels.json --out work/data/toc-v1
 ```
 
@@ -153,7 +154,7 @@ python -m tinydet.predict --model work/export/model.onnx \
   --source work/raw/toc.mp4 --out work/predict/toc-onnx
 ```
 
-ONNX inputs must come from `tinydet.export`, with matching `export.json` and `classes.json` beside the model.
+ONNX inputs must come from `tinydet.export.export`, with matching `export.json` and `classes.json` beside the model.
 Evaluation requires exact model/dataset class order; the bundled COCO80 initializer cannot evaluate ToC55 labels.
 Prediction accepts one image, a flat image directory or one video. It writes annotated JPEGs or `visualization.mp4`
 at the original size, `predictions.jsonl` with original-image pixel boxes, and `report.json`.
@@ -176,7 +177,7 @@ These are host CPU measurements, not X5 latency.
 ### ONNX export and X5 compilation
 
 ```bash
-python -m tinydet.export --checkpoint work/train/toc-yolo11n-v1/weights/best.pt \
+python -m tinydet.export.export --checkpoint work/train/toc-yolo11n-v1/weights/best.pt \
   --check-manifest work/data/toc-v1/manifest.jsonl
 python -m tinydet.quantization.prepare_calibration --manifest work/data/toc-v1/manifest.jsonl \
   --count 512

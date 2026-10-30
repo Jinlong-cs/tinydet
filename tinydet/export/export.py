@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # raw_forward / bpu_attention adapted from D-Robotics export_monkey_patch.py.
 # Original portions: Copyright (c) 2025, WuChao D-Robotics, Apache-2.0.
-# See docs/LICENSE-D-Robotics. Modified for this fixed YOLO11 raw-head/parity adapter.
+# See ../docs/LICENSE-D-Robotics. Modified for this fixed YOLO11 raw-head/parity adapter.
 """YOLO11 raw cls/DFL heads, static opset11, with source-to-ONNX parity."""
 
 import argparse
@@ -9,7 +9,7 @@ import copy
 import types
 from pathlib import Path
 
-from .common import UPSTREAM, WORK, check_upstream, read_manifest, rgb_input, sha256, source_provenance, write_json
+from ..common import UPSTREAM, WORK, check_upstream, read_manifest, rgb_input, sha256, source_provenance, write_json
 
 # isort: split
 
