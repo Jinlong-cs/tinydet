@@ -26,7 +26,7 @@ def calibrate(args):
                 selected.append(groups[domain].pop())
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
-    if any(path.name != ".gitkeep" for path in out.iterdir()):
+    if any(out.iterdir()):
         raise FileExistsError(f"Calibration output must be empty: {out}")
     data_dir = out / "rgb"
     data_dir.mkdir()
