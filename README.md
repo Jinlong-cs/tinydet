@@ -87,7 +87,7 @@ Prepare data inside the same environment and at the same mount path used for tra
 generated `data.yaml` contains absolute paths. Create the raw/weights directories, but do not pre-create
 the generated dataset or training run directory.
 
-Use the 55 ToC classes in [tinydet/labels.json](tinydet/labels.json); see [label definitions](tinydet/docs/labels.md)
+Use the 55 ToC classes in [tinydet/data/labels.json](tinydet/data/labels.json); see [label definitions](tinydet/docs/labels.md)
 for Chinese names and annotation rules. YOLO labels use `class_id cx cy width height` with normalized coordinates.
 Class IDs are the zero-based array indices (0–54), not COCO IDs; `1 0.5 0.5 0.2 0.3` labels a chair.
 Empty label files must be reviewed negatives; missing files raise an error. Semantic masks are not detection labels.
@@ -104,7 +104,7 @@ cannot cross train/val. Partial labels, ignore regions and a separate test split
 
 ```bash
 python -m tinydet.data.prepare_data --manifest work/raw/toc-v1/source.jsonl \
-  --classes tinydet/labels.json --out work/data/toc-v1
+  --classes tinydet/data/labels.json --out work/data/toc-v1
 ```
 
 The output directory must not exist. It contains matching images/labels, `data.yaml`,
