@@ -1,6 +1,6 @@
 # ToC detection labels
 
-[`../labels.json`](../labels.json) defines the 55 ToC classes. The array index is the YOLO class ID
+[`../data/labels.json`](../data/labels.json) defines the 55 ToC classes. The array index is the YOLO class ID
 (0–54); there is no background class. Keep this order with each dataset, checkpoint and exported model.
 These are custom IDs, not COCO IDs. COCO weights remain a training initializer; changing this file does not
 relabel existing annotations or turn a COCO checkpoint into a ToC model.
