@@ -1,4 +1,7 @@
 # Byte-compiled / optimized / DLL files
+/work/
+/venv/
+/tinydet/quantization/calib_data/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -131,7 +134,8 @@ venv.bak/
 
 # VSCode project settings
 .vscode/
-.devcontainer/
+.devcontainer/*
+!.devcontainer/tinydet/
 
 # Rope project settings
 .ropeproject

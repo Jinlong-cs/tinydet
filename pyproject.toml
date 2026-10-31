@@ -82,6 +82,7 @@ dependencies = [
 
 # Optional dependencies ------------------------------------------------------------------------------------------------
 [project.optional-dependencies]
+tinydet = ["onnx>=1.16,<2", "onnxruntime>=1.20,<2", "torch>=2.6,<3"]
 dev = [
     "ipython",
     "pytest",
@@ -194,8 +195,8 @@ ultralytics = "ultralytics.cfg:entrypoint"
 
 # Tools settings -------------------------------------------------------------------------------------------------------
 [tool.setuptools]  # configuration specific to the `setuptools` build backend.
-packages = { find = { where = ["."], include = ["ultralytics", "ultralytics.*"] } }
-package-data = { "ultralytics" = ["**/*.yaml", "**/*.sh"], "ultralytics.assets" = ["*.jpg"], "ultralytics.solutions.templates" = ["*.html"]}
+packages = { find = { where = ["."], include = ["ultralytics", "ultralytics.*", "tinydet", "tinydet.*"] } }
+package-data = { "ultralytics" = ["**/*.yaml", "**/*.sh"], "ultralytics.assets" = ["*.jpg"], "ultralytics.solutions.templates" = ["*.html"], "tinydet" = ["docs/labels.md", "docs/LICENSE-D-Robotics"], "tinydet.data" = ["labels.json"], "tinydet.quantization" = ["config.yaml"]}
 
 [tool.setuptools.dynamic]
 version = { attr = "ultralytics.__version__" }
@@ -248,6 +249,9 @@ docstring-code-format = true
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tinydet/**/*.py" = ["D101", "D102", "D103"]
 
 [tool.docformatter]
 wrap-summaries = 120

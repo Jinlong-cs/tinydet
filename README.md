@@ -1,3 +1,268 @@
+# TinyPerception
+
+TinyPerception is the shared [Ultralytics](https://github.com/ultralytics/ultralytics) fork for
+TinyDet object detection and TinySeg semantic segmentation. Task entry points, configurations,
+class mappings and export workflows remain separate; both reuse upstream model and training implementations.
+Both tasks use the same upstream base and are introduced through separate reviewed PRs.
+
+## TinyDet (YOLO11n)
+
+Detection adapters live in `tinydet/`. TinySeg data preparation is a separate follow-up PR.
+Data preparation lives in `tinydet/data/`, ONNX export in `tinydet/export/`, and X5 compilation in `tinydet/quantization/`.
+
+### Setup
+
+Clone the repository on the training host. These commands assume #1 has merged into `main`;
+for review before merging, use `-b feat/tinyseg-data-contract` instead of `-b main`.
+Use an ordinary clone so Git metadata is available inside the container.
+
+```bash
+git clone -b main https://github.com/Jinlong-cs/tinyperception.git
+cd tinyperception
+```
+
+#### Docker or Dev Container
+
+Use an x86-64 Linux host with an NVIDIA GPU, a driver compatible with CUDA 12.8, Docker and the
+[NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+The training image uses official PyTorch 2.7.1/CUDA 12.8, which supports
+[Blackwell GPUs](https://pytorch.org/blog/pytorch-2-7/). It is separate from the X5 compilation image.
+
+From a non-root host account:
+
+```bash
+nvidia-smi
+docker build --build-arg USER_UID="$(id -u)" -f docker/Dockerfile-tinydet -t tinyperception-train:cu128 docker
+docker run --rm -it --gpus all --shm-size=8g \
+  -v "$PWD:/workspace" -w /workspace tinyperception-train:cu128
+```
+
+Inside the container, install the mounted checkout. Packages, caches and outputs persist under `work/`:
+
+```bash
+mkdir -p work/tmp work/cache/pip work/weights
+python -m pip install --user -e ".[tinydet]"
+python -c "import torch; assert torch.cuda.is_available(); print(torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0)); print(torch.ones(1, device='cuda') + 1)"
+python -m pip freeze > work/environment.txt
+```
+
+For VS Code, open the clone on the GPU host and select **Dev Containers: Reopen in Container → TinyDet (CUDA)**.
+The Dev Container uses the same Dockerfile and installs the checkout automatically; run the GPU check above.
+From a Mac, first open the host folder with Remote - SSH. The CUDA container runs on that Linux host.
+After rebuilding or recloning, reinstall the current checkout. Do not reuse `work/python/` across Python/CUDA environments.
+
+#### Local Python alternative
+
+Use Python 3.11+ with PyTorch appropriate for the host GPU. CPU preparation and smoke runs also work:
+
+```bash
+python3.11 -m venv venv
+source venv/bin/activate
+export TINY_WORK_DIR="$PWD/work"
+export PIP_CACHE_DIR="$TINY_WORK_DIR/cache/pip"
+export TMPDIR="$TINY_WORK_DIR/tmp"
+export PYTHONDONTWRITEBYTECODE=1
+mkdir -p "$TMPDIR" "$PIP_CACHE_DIR" "$TINY_WORK_DIR/weights"
+python -m pip install -e ".[tinydet]"
+```
+
+### Data preparation
+
+Keep source data and generated artifacts under `work/`. Only the bundled `weights/yolo11n.pt` is tracked;
+other contents are ignored by Git:
+
+```text
+work/
+  raw/toc-v1/
+    source.jsonl
+    images/001.png, 002.png, ...
+    labels/001.txt, 002.txt, ...
+  weights/yolo11n.pt
+  data/toc-v1/              # generated
+  train/toc-yolo11n-v1/     # generated
+```
+
+Raw data can live elsewhere if it is mounted inside the container; manifest paths must resolve there.
+Prepare data inside the same environment and at the same mount path used for training and resume:
+generated `data.yaml` contains absolute paths. Create the raw/weights directories, but do not pre-create
+the generated dataset or training run directory.
+
+Use the 55 ToC classes in [tinydet/data/labels.json](tinydet/data/labels.json); see [label definitions](tinydet/docs/labels.md)
+for Chinese names and annotation rules. YOLO labels use `class_id cx cy width height` with normalized coordinates.
+Class IDs are the zero-based array indices (0–54), not COCO IDs; `1 0.5 0.5 0.2 0.3` labels a chair.
+Empty label files must be reviewed negatives; missing files raise an error. Semantic masks are not detection labels.
+Other datasets may pass their own ordered JSON list to `--classes`. JSONL paths are relative to `source.jsonl`:
+
+```jsonl
+{"id":"001","split":"train","domain":"toc/front","group":"session_a","image":"images/001.png","label":"labels/001.txt"}
+{"id":"002","split":"val","domain":"toc/front","group":"session_b","image":"images/002.png","label":"labels/002.txt"}
+```
+
+Inputs are 640×352, 640×480 or 640×512, resized over the full frame to 640×352 with LINEAR interpolation.
+Normalized boxes retain their coordinates. Split by capture sequence; groups and duplicate pixels
+cannot cross train/val. Partial labels, ignore regions and a separate test split are not supported.
+
+```bash
+python -m tinydet.data.prepare_data --manifest work/raw/toc-v1/source.jsonl \
+  --classes tinydet/data/labels.json --out work/data/toc-v1
+```
+
+The output directory must not exist. It contains matching images/labels, `data.yaml`,
+`classes.json`, `dataset.json` and a manifest with source/output hashes. Training validates the
+prepared file set and class order. For data or label changes, prepare a new version directory instead of
+editing generated files. Dataset/class changes do not require Python code changes.
+
+### Training
+
+The repository includes the official [YOLO11n weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt)
+at `work/weights/yolo11n.pt` (SHA256 `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1`).
+Cloning provides the default training checkpoint; no separate download is needed. `--model` also accepts local official
+[YOLO11s weights](https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt) or a compatible checkpoint;
+switching n/s needs no code change. Upstream GPU AMP checks may download a separate `yolo26n.pt` once.
+
+```bash
+python -m tinydet.train --data work/data/toc-v1/data.yaml --model work/weights/yolo11n.pt \
+  --out work/train/toc-yolo11n-v1 --device 0 --epochs 200 --patience 40 --batch 32 --workers 4
+# Resume an interrupted run with the original data, output directory and device environment.
+python -m tinydet.train --data work/data/toc-v1/data.yaml \
+  --model work/train/toc-yolo11n-v1/weights/resume.pt --out work/train/toc-yolo11n-v1 --device 0 --resume
+```
+
+Training and validation use RGB NCHW 352×640 inputs scaled to 0–1. Only one device is supported;
+use `--device cpu` for CPU. The full `resume.pt` retains optimizer/EMA/scaler state.
+The initial recipe uses AdamW, lr0=0.001, cosine scheduling and seed 42; mosaic/mixup/cutmix and multiscale
+are disabled. Epochs, patience, batch size and workers are CLI options. Changing the optimizer, learning
+rate, input contract or architecture requires a code/model configuration change.
+
+Each run writes `weights/best.pt`, `weights/last.pt`, `weights/resume.pt`, `results.csv`, `args.yaml`
+and `provenance.json`. Use `best.pt` for export. `--resume` restores an interrupted run; to continue from
+a completed run, start a new output directory with `--model <previous-run>/weights/best.pt` instead.
+Keep the data, class order, checkpoint, source revision and `work/environment.txt` with each experiment.
+See each module's `--help` for additional options. Container configuration is statically checked;
+building it and training on CUDA have not yet been validated for this PR.
+
+### CPU evaluation and prediction
+
+Evaluate a trained PT checkpoint or its raw-head ONNX export on the full prepared validation split:
+
+```bash
+python -m tinydet.eval --model work/train/toc-yolo11n-v1/weights/best.pt \
+  --data work/data/toc-v1/data.yaml --out work/eval/toc-pt
+python -m tinydet.eval --model work/export/model.onnx \
+  --data work/data/toc-v1/data.yaml --out work/eval/toc-onnx
+python -m tinydet.predict --model work/export/model.onnx \
+  --source work/raw/toc.mp4 --out work/predict/toc-onnx
+```
+
+ONNX inputs must come from `tinydet.export.export`, with matching `export.json` and `classes.json` beside the model.
+Evaluation requires exact model/dataset class order; the bundled COCO80 initializer cannot evaluate ToC55 labels.
+Prediction accepts one image, a flat image directory or one video. It writes annotated JPEGs or `visualization.mp4`
+at the original size, `predictions.jsonl` with original-image pixel boxes, and `report.json`.
+Evaluation writes `metrics.json` and `predictions.jsonl` with boxes in the prepared 640×352 coordinates.
+Use a new output directory for every run.
+
+Both paths use batch-one CPU inference, full-frame LINEAR resize to 640×352, RGB/255, class-aware NMS and clipped boxes.
+Defaults are `--iou 0.7 --max-det 300 --threads 4 --warmup 5`; `--multi-label` enables multiple classes per candidate.
+Evaluation uses `--conf 0.001` for AP curves; prediction uses `--conf 0.25`. Use identical thresholds when comparing
+latency or detections. Training validation defaults to multi-label NMS and does not clip boxes, so its metrics can differ.
+
+Overall/per-class P, R and AP use the official matching and metric implementations. P/R are reported at the best
+mean-F1 confidence point; per-class prediction/false-positive counts use the configured threshold.
+Classes with no ground truth have null metrics and are excluded from mAP; their false positives are still counted.
+Reports include model/class/source identity, runtime versions, host architecture and stage mean/p50/p95/max milliseconds.
+Timing excludes model loading, warmup, file I/O, metric computation, drawing and encoding. PT forward includes native
+DFL decoding; ONNX decoding is counted in postprocessing. Compare total time when comparing these backends.
+These are host CPU measurements, not X5 latency.
+
+### ONNX export and X5 compilation
+
+```bash
+python -m tinydet.export.export --checkpoint work/train/toc-yolo11n-v1/weights/best.pt \
+  --check-manifest work/data/toc-v1/manifest.jsonl
+python -m tinydet.quantization.prepare_calibration --manifest work/data/toc-v1/manifest.jsonl \
+  --count 512
+```
+
+From the repository root, export defaults to `work/export/model.onnx`, with `classes.json` and `export.json`
+beside it. The standard container sets `TINY_WORK_DIR=/workspace/work`, matching
+`model_parameters.onnx_model: /workspace/work/export/model.onnx` in `tinydet/quantization/config.yaml`.
+The output directory must not exist. Use a new `--out` for another export; if you change `--out` or
+`TINY_WORK_DIR`, update the manual YAML/checker path and the Python compiler's `--onnx` accordingly.
+
+The opset11 graph accepts FLOAT32 `[1,3,352,640]` and returns
+`cls_s8, box_s8, cls_s16, box_s16, cls_s32, box_s32`. Grids are 44×80, 22×40 and 11×20;
+class channels follow the checkpoint, and box heads have 64 channels (DFL reg_max16).
+Decoding/NMS runs outside the graph; class changes require matching deployment metadata.
+
+By default, export checks raw heads, decoded boxes and scores on up to 64 validation images plus random input.
+Calibration uses train samples only; `--count` cannot exceed the train set size. Files contain
+RGB 0–255 float32 CHW values, and the mapper applies 1/255 once. Export records source, class and model
+hashes; calibration records source-manifest, sample and RGB-file hashes.
+
+Calibration defaults to `tinydet/quantization/calib_data/`, with `.rgb` files in `rgb/` and a
+`manifest.json` beside it. The script creates the directory if absent and rejects nonempty output.
+The directory is ignored by Git. Use `--out` and the compiler's `--calibration` to override these script-relative defaults.
+
+Both workflows use [tinydet/quantization/config.yaml](tinydet/quantization/config.yaml) and an x86 Linux OpenExplorer v1.2.8 environment.
+
+```bash
+IMAGE=registry.d-robotics.cc/deliver/hub.hobot.cc/aitools/ai_toolchain_ubuntu_20_x5_cpu:v1.2.8
+```
+
+#### Automatic compilation
+
+```bash
+docker run --rm --cpus=4 --memory=16g \
+  -v "$PWD:/workspace" -w /workspace \
+  -e TINY_WORK_DIR=/workspace/work -e PYTHONDONTWRITEBYTECODE=1 \
+  -e OMP_NUM_THREADS=4 -e OPENBLAS_NUM_THREADS=4 \
+  "$IMAGE" python3 -m tinydet.quantization.x5_compile \
+  --onnx work/export/model.onnx \
+  --out work/ptq --name yolo11n_640x352_int8_nv12 --run
+```
+
+Omit `--run` to generate configuration only; use a new output directory. The configuration requests
+bayes-e, NV12 BT601 video range, a single 1/255 scale, INT8 and latency/O3. `compiled.json` is written
+only after SDK execution and node/input audits pass. HB/X5 validation remains a separate step.
+Local CPU, ONNX and configuration checks do not establish product accuracy or board acceptance.
+
+#### Manual compilation
+
+Edit `tinydet/quantization/config.yaml` with paths visible inside the SDK container. Its defaults match the export
+and calibration directories above and write to `work/ptq-manual`. The Python workflow loads the same
+defaults, then overrides model/calibration/output paths, model name and jobs from its CLI arguments.
+
+From the repository root, open the same SDK image:
+
+```bash
+docker run --rm -it --cpus=4 --memory=16g \
+  -v "$PWD:/workspace" -w /workspace \
+  -e OMP_NUM_THREADS=4 -e OPENBLAS_NUM_THREADS=4 "$IMAGE" bash
+```
+
+Inside the container:
+
+```bash
+mkdir -p /workspace/work/ptq-manual
+cd /workspace/work/ptq-manual
+hb_mapper checker --model-type onnx --model /workspace/work/export/model.onnx --march bayes-e
+hb_mapper makertbin --config /workspace/tinydet/quantization/config.yaml --model-type onnx
+hb_model_info /workspace/work/ptq-manual/yolo11n_640x352_int8_nv12.bin
+```
+
+Use a fresh output directory and update the commands if you change the YAML paths or model name.
+Keep calibration as RGB float32 CHW values in 0–255; the YAML applies 1/255 once. This direct SDK path
+does not perform the Python wrapper's provenance checks or write `compiled.json`; retain the SDK logs
+and verify actual precision, placement and NV12 BT601 video range before board validation.
+
+The upstream base is `922563eab42b778445e55a2edbabb6974eed8e4b` (8.4.192). Adapters were migrated from
+[tinydet-legacy](https://github.com/Jinlong-cs/tinydet-legacy) at `7e9a16edd4ae25c8301a6fba82e57b4ae518a4e1`.
+Raw-head/Attention export code derives from [D-Robotics](https://github.com/D-Robotics/rdk_model_zoo/blob/rdk_x5/samples/vision/ultralytics_yolo/conversion/export_monkey_patch.py);
+attribution and its [Apache-2.0 license](tinydet/docs/LICENSE-D-Robotics) are retained.
+The upstream README and [AGPL-3.0 license](LICENSE) are preserved below.
+
+---
+
 <div align="center">
   <p>
     <a href="https://www.ultralytics.com/yolo/yolo27?utm_source=github&utm_medium=social&utm_campaign=yolo27-launch-2026&utm_content=banner" target="_blank">
